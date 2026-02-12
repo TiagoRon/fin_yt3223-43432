@@ -1,6 +1,6 @@
 moviepy
 edge-tts
-google-generativeai
+google-genai
 requests
 python-dotenv
 pillow
