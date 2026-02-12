@@ -939,18 +939,18 @@ def assemble_video(scenes, music_dir, output_file, title_text=None, mood="myster
                     # 9:16 Crop/Fill - OPTIMIZED: Resize immediately to avoid processing 4k
                     target_ratio = 1080 / 1920
                     
-                     if c.w != 1080 or c.h != 1920:
-                         # Only resize if needed (Logic for dynamic resize/crop)
-                         # If much larger, resize first close to target height (Optimization)
-                         if c.h > 2000:
-                             c = c.resize(height=1920) 
-                          
-                         # OPTIMIZATION: Always use Center Crop (Fill) for standard 16:9 content.
-                         # The previous "Blurry Background" effect (Composite 2 layers) was doubling the render time per frame.
-                         # For stock footage (atmosphere, people), Center Crop is standard for Shorts.
-                         
-                         input_ratio = c.w / c.h
-                         target_ratio = 1080 / 1920
+                    if c.w != 1080 or c.h != 1920:
+                        # Only resize if needed (Logic for dynamic resize/crop)
+                        # If much larger, resize first close to target height (Optimization)
+                        if c.h > 2000:
+                            c = c.resize(height=1920) 
+                        
+                        # OPTIMIZATION: Always use Center Crop (Fill) for standard 16:9 content.
+                        # The previous "Blurry Background" effect (Composite 2 layers) was doubling the render time per frame.
+                        # For stock footage (atmosphere, people), Center Crop is standard for Shorts.
+                        
+                        input_ratio = c.w / c.h
+                        target_ratio = 1080 / 1920
                          
                          if input_ratio > target_ratio:
                              # Input is "wider" than target (e.g. 16:9 vs 9:16) -> Fill Height, Crop Sides
