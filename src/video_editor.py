@@ -411,12 +411,22 @@ def create_title_card(text, duration=2.5, width=1080, height=1920):
     if not text: return None
     
     # Font Setup
+    # Font Setup
     fontsize = 90
-    font_path = "C:\\Windows\\Fonts\\impact.ttf"
+    font_path = FONT_PATH  # Use the constant instead of hardcoded Windows path
     try:
         font = ImageFont.truetype(font_path, fontsize)
-    except:
-        font = ImageFont.load_default()
+    except IOError:
+        # Fallback: Try to find any .ttf in assets
+        try:
+            possible_fonts = [f for f in os.listdir("assets/fonts") if f.endswith(".ttf")]
+            if possible_fonts:
+                fallback = os.path.join("assets/fonts", possible_fonts[0])
+                font = ImageFont.truetype(fallback, fontsize)
+            else:
+                font = ImageFont.load_default()
+        except:
+            font = ImageFont.load_default()
         
     # Wrap text
     lines = textwrap.wrap(text, width=18)
