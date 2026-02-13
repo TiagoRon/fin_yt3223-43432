@@ -498,23 +498,47 @@ def create_karaoke_clips(word_timings, duration, start_offset, width=1080, heigh
     # Load Font - Custom Branding
     font_path = FONT_PATH
     font = None
+    
+    print(f"   🔎 Debug Font Path: {os.path.abspath(font_path)}")
+    if os.path.exists(font_path):
+        print("      ✅ Font file exists at path.")
+    else:
+        print("      ❌ Font file NOT FOUND at path.")
+        
     try:
         font = ImageFont.truetype(font_path, fontsize)
         print(f"      ✅ Loaded Custom Font: {font_path}")
-    except IOError:
-        print(f"      ⚠️ Failed to load custom font {font_path}. Fallback to default.")
+    except IOError as e:
+        print(f"      ⚠️ Failed to load custom font {font_path}: {e}")
+        # Fallback: Try to find any .ttf in assets
         try:
-             # Fallback to system font
-             font = ImageFont.truetype("arialbd.ttf", fontsize)
-        except:
-             font = ImageFont.load_default()
+            possible_fonts = [f for f in os.listdir("assets/fonts") if f.endswith(".ttf")]
+            if possible_fonts:
+                fallback = os.path.join("assets/fonts", possible_fonts[0])
+                print(f"      🔄 Retrying with fallback: {fallback}")
+                font = ImageFont.truetype(fallback, fontsize)
+            else:
+                print("      ❌ No fallback fonts found in assets/fonts.")
+                font = ImageFont.load_default()
+        except Exception as ex:
+            print(f"      ❌ Fallback failed: {ex}")
+            font = ImageFont.load_default()
 
     # Pre-calculate Layout (Map words to lines)
     if is_header:
         # Box header: Allow slightly wider lines
         chars_per_line = 20
     else:
-        avg_char_width = fontsize * 0.50
+        # If fallback to default font (PIL default is tiny), we need huge adjustments or it will be unreadable.
+        # But load_default() returns a font object that might behave differently.
+        # Let's verify what font object we have.
+        if isinstance(font, ImageFont.FreeTypeFont): # Changed from ImageFont.ImageFont to ImageFont.FreeTypeFont for accuracy
+             # TrueType
+             avg_char_width = fontsize * 0.50
+        else:
+             # Default (Bitmap?)
+             avg_char_width = 10 # Tiny
+             
         # Use narrower width to force 2-4 words per line (Punchy style)
         chars_per_line = int((width * 0.7) / avg_char_width) 
     
