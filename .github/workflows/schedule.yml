@@ -21,7 +21,7 @@ jobs:
     - name: Install system dependencies (ImageMagick)
       run: |
         sudo apt-get update
-        sudo apt-get install -y imagemagick
+        sudo apt-get install -y imagemagick ffmpeg
         # Fix ImageMagick policy to allow PDF/text operations if needed by MoviePy
         sudo sed -i 's/none/read,write/g' /etc/ImageMagick-6/policy.xml
 

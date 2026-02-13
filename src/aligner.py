@@ -35,6 +35,8 @@ def get_word_timings(audio_path, text_hint=None):
         result = model.transcribe(audio_path, word_timestamps=True, language="es")
     except Exception as e:
         print(f"❌ Whisper Error: {e}")
+        if text_hint:
+            return linear_fallback(text_hint.split())
         return []
 
     # Collect Whisper Words (The "Truth" of Timing, but "Lie" of Text)
