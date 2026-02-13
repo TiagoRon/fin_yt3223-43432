@@ -353,6 +353,24 @@ def run_batch(count, topic=None, use_trends=False, style="curiosity", log_func=p
             except Exception as e:
                 log_func(f"⚠️ Error guardando historial: {e}")
 
+            # --- CLEANUP: Remove intermediate files (voices, scenes, etc.) ---
+            try:
+                log_func("🧹 Limpiando archivos temporales...")
+                for fname in os.listdir(video_output_dir):
+                    if fname.endswith(".mp4") or fname.endswith(".txt") or fname.endswith(".json"):
+                        continue # Keep final video and metadata
+                    
+                    file_path = os.path.join(video_output_dir, fname)
+                    try:
+                        if os.path.isfile(file_path):
+                            os.remove(file_path)
+                            # log_func(f"   🗑️ Borrado: {fname}")
+                    except Exception as ex:
+                        log_func(f"   ⚠️ No se pudo borrar {fname}: {ex}")
+                log_func("✨ Limpieza completada. Solo queda el video final y metadatos.")
+            except Exception as e:
+                log_func(f"⚠️ Error en limpieza: {e}")
+
         else:
             log_func("Falló la creación del video.")
 
