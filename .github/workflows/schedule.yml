@@ -8,6 +8,10 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        style: [curiosity, what_if, top_3]
+      fail-fast: false # If one fails, let others continue
 
     steps:
     - name: Checkout code
@@ -18,7 +22,7 @@ jobs:
       with:
         python-version: '3.11'
 
-    - name: Install system dependencies (ImageMagick)
+    - name: Install system dependencies (ImageMagick & FFmpeg)
       run: |
         sudo apt-get update
         sudo apt-get install -y imagemagick ffmpeg
@@ -30,12 +34,12 @@ jobs:
         python -m pip install --upgrade pip
         pip install -r requirements.txt
 
-    - name: Run AutoShorts Generator
+    - name: Run AutoShorts Generator (${{ matrix.style }})
       env:
         GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
         PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY }}
-        VIDEO_COUNT: 1
-        VIDEO_STYLE: curiosity
+        VIDEO_COUNT: 2
+        VIDEO_STYLE: ${{ matrix.style }}
       run: python main.py
 
     - name: Debug - List Output
@@ -46,6 +50,6 @@ jobs:
       uses: actions/upload-artifact@v4
       if: always()
       with:
-        name: daily-shorts
+        name: daily-shorts-${{ matrix.style }}
         path: output/
         retention-days: 5
