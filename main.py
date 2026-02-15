@@ -317,9 +317,14 @@ def run_batch(count, topic=None, use_trends=False, style="curiosity", log_func=p
             processed_scenes.append(scene)
 
         # 3. Create Final Video
-        log_func("3. Componiendo edición final (Montaje)...")
         output_file = os.path.join(video_output_dir, "short_final.mp4")
         
+        # Calculate Title and Mood EARLY for metadata
+        vid_title = script.get('title', '').upper()
+        # Get Mood (Default to mystery)
+        vid_mood = script.get('mood', 'mystery').lower()
+        log_func(f"   🎵 Mood detectado: {vid_mood}")
+
         # --- SAVE METADATA EARLY (Robustness) ---
         try:
              # Save metadata TXT
@@ -349,12 +354,7 @@ def run_batch(count, topic=None, use_trends=False, style="curiosity", log_func=p
         # New function signature for editor
         from src.video_editor import assemble_video
         
-        # Pass title for overlay
-        vid_title = script.get('title', '').upper()
-        # Get Mood (Default to mystery)
-        # vid_mood calculated above
-        
-        log_func(f"   🎵 Mood detectado: {vid_mood}")
+        # vid_title and vid_mood calculated above
         
         success = assemble_video(processed_scenes, "music", output_file, title_text=vid_title, mood=vid_mood)
         
