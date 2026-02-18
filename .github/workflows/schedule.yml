@@ -84,4 +84,4 @@ jobs:
       with:
         name: ALL_DAILY_VIDEOS
         path: all_daily_videos.zip
-        retention-days: 5
+        retention-days: 3
