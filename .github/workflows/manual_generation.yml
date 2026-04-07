@@ -61,6 +61,15 @@ jobs:
         python -m pip install --upgrade pip
         pip install -r requirements.txt
 
+    - name: Set up YouTube Cookies (Optional)
+      env:
+        YOUTUBE_COOKIES: ${{ secrets.YOUTUBE_COOKIES }}
+      run: |
+        if [ -n "$YOUTUBE_COOKIES" ]; then
+          echo "$YOUTUBE_COOKIES" > cookies.txt
+          echo "Cookies saved."
+        fi
+
     - name: Run Cloud Video Generation
       env:
         GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}

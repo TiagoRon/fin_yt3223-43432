@@ -322,6 +322,9 @@ def get_youtube_clip(query, output_path, duration=4.0):
         'no_warnings': True,
         'socket_timeout': 15,  # Don't hang forever
     }
+    
+    if os.path.exists("cookies.txt"):
+        ydl_opts_info["cookiefile"] = "cookies.txt"
 
     video = None
     url = None
@@ -377,6 +380,9 @@ def get_youtube_clip(query, output_path, duration=4.0):
         # cleanly, providing an I-Frame at t=0 so MoviePy doesn't generate grey/glitchy screens!
         'download_ranges': yt_dlp.utils.download_range_func(None, [(start_time, end_time)]),
     }
+    
+    if os.path.exists("cookies.txt"):
+        ydl_opts_download["cookiefile"] = "cookies.txt"
 
     try:
         print(f"      ⏱️ Extrayendo {duration}s desde t={start_time}s...")
