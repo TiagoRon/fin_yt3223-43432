@@ -12,3 +12,4 @@ decorator
 scipy
 openai-whisper
 yt-dlp
+stable-ts

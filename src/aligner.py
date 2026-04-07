@@ -1,4 +1,3 @@
-import stable_whisper
 import os
 
 model = None
@@ -6,6 +5,7 @@ model = None
 def load_model():
     global model
     if model is None:
+        import stable_whisper
         print("⏳ Loading Stable-Whisper model (tiny) for 100% PERFECT alignment...")
         model = stable_whisper.load_model("tiny")
         print("✅ Stable-Whisper model loaded.")

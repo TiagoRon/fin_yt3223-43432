@@ -303,6 +303,8 @@ def run_batch(count, topic=None, use_trends=False, style="curiosity", log_func=p
                         log_func(f"   ✅ Timings recovered with Whisper ({len(timings)} words).")
                 except Exception as ew:
                     log_func(f"   ❌ Whisper failed: {ew}. Using linear fallback.")
+                    from src.aligner import linear_fallback
+                    timings = linear_fallback(scene['text'].split())
             
             scene['timings'] = timings
             scene['audio_path'] = audio_path
