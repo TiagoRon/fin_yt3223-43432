@@ -1,0 +1,98 @@
+name: Manual Video Generation
+
+on:
+  workflow_dispatch:
+    inputs:
+      video_count:
+        description: 'Number of videos to generate'
+        required: true
+        default: '1'
+      video_style:
+        description: 'Style of the video'
+        required: true
+        type: choice
+        options:
+          - curiosity
+          - what_if
+          - top_3
+          - dark_facts
+          - history
+          - custom
+        default: 'curiosity'
+      video_topic:
+        description: 'Specific Topic (leave blank for random/trends)'
+        required: false
+        default: ''
+      watermark_text:
+        description: 'Watermark Text'
+        required: false
+        default: '@AIShortsGenerator'
+      language:
+        description: 'Language Code (e.g. es, en)'
+        required: false
+        default: 'es'
+
+jobs:
+  generate_manual:
+    name: Generate Cloud Videos
+    runs-on: ubuntu-latest
+    
+    permissions:
+      actions: write
+      contents: write
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+
+    - name: Install system dependencies (ImageMagick & FFmpeg)
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y imagemagick ffmpeg zip
+        sudo sed -i 's/none/read,write/g' /etc/ImageMagick-6/policy.xml
+
+    - name: Install Python dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+
+    - name: Run Cloud Video Generation
+      env:
+        GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
+        PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY }}
+        VIDEO_COUNT: ${{ github.event.inputs.video_count }}
+        VIDEO_STYLE: ${{ github.event.inputs.video_style }}
+        VIDEO_TOPIC: ${{ github.event.inputs.video_topic }}
+        WATERMARK_TEXT: ${{ github.event.inputs.watermark_text }}
+        LANGUAGE: ${{ github.event.inputs.language }}
+      run: python cloud_main.py
+
+    - name: Commit & Push History (Prevent Duplicates)
+      continue-on-error: true
+      run: |
+        git config user.name "AutoShorts Bot"
+        git config user.email "actions@github.com"
+        git pull origin main --rebase || echo "No changes to pull"
+        git add video_history.json
+        git commit -m "Update video history from manual run [skip ci]" || echo "No changes to commit"
+        git push origin main || echo "Failed to push history"
+
+    - name: Zip Generated Videos
+      if: always()
+      run: |
+        cd output
+        zip -r ../generated_videos.zip .
+        cd ..
+
+    - name: Upload Final Bundle
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: GENERATED_VIDEOS_BUNDLE
+        path: generated_videos.zip
+        retention-days: 5

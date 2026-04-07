@@ -23,12 +23,14 @@ def cloud_main():
     if not topic: topic = None
     
     style = os.environ.get("VIDEO_STYLE", "curiosity")
+    watermark = os.environ.get("WATERMARK_TEXT", "@AIShortsGenerator")
+    lang = os.environ.get("LANGUAGE", "es")
     
-    print(f"🔧 Config: Count={count}, Topic={topic if topic else 'Random'}, Style={style}")
+    print(f"🔧 Config: Count={count}, Topic={topic if topic else 'Random'}, Style={style}, Lang={lang}")
     
     # 2. Run Batch
     try:
-        run_batch(count=count, topic=topic, style=style, log_func=print)
+        run_batch(count=count, topic=topic, style=style, watermark_text=watermark, lang=lang, log_func=print)
         print("✅ Cloud Batch Completed Successfully.")
     except Exception as e:
         print(f"❌ Cloud Batch Failed: {e}")
