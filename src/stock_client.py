@@ -314,18 +314,29 @@ def get_youtube_clip(query, output_path, duration=4.0):
         f"ytsearch1:{query} short scene",
     ]
 
+    # Resolve cookies.txt path robustly
+    cookie_path = "cookies.txt"
+    if not os.path.exists(cookie_path):
+        alt_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "cookies.txt")
+        if os.path.exists(alt_path):
+            cookie_path = alt_path
+
+    cookie_args = {}
+    if os.path.exists(cookie_path):
+        cookie_args["cookiefile"] = cookie_path
+    elif os.name == "nt":
+        cookie_args["cookiesfrombrowser"] = ("chrome",)
+
     ydl_opts_info = {
         'format': 'bestvideo[ext=mp4][height<=1080]+bestaudio[ext=m4a]/best[ext=mp4][height<=1080]/bestvideo+bestaudio/best',
         'noplaylist': True,
         'quiet': True,
         'no_warnings': True,
         'socket_timeout': 15,  # Don't hang forever
-        'extractor_args': {'youtube': ['player_client=ios,tv']},
+        'extractor_args': {'youtube': ['player_client=android,web']},
         'impersonate': 'chrome',
     }
-    
-    if os.path.exists("cookies.txt"):
-        ydl_opts_info["cookiefile"] = "cookies.txt"
+    ydl_opts_info.update(cookie_args)
 
     video = None
     url = None
@@ -376,16 +387,14 @@ def get_youtube_clip(query, output_path, duration=4.0):
         'no_warnings': True,
         'socket_timeout': 20,
         'merge_output_format': 'mp4',
-        'extractor_args': {'youtube': ['player_client=ios,tv']},
+        'extractor_args': {'youtube': ['player_client=android,web']},
         'impersonate': 'chrome',
         # Download only the needed section cleanly (RE-ENCODE)
         # We explicitly omit 'force_keyframes_at_cuts' to ensure ffmpeg re-encodes the snippet
         # cleanly, providing an I-Frame at t=0 so MoviePy doesn't generate grey/glitchy screens!
         'download_ranges': yt_dlp.utils.download_range_func(None, [(start_time, end_time)]),
     }
-    
-    if os.path.exists("cookies.txt"):
-        ydl_opts_download["cookiefile"] = "cookies.txt"
+    ydl_opts_download.update(cookie_args)
 
     try:
         print(f"      ⏱️ Extrayendo {duration}s desde t={start_time}s...")
