@@ -314,7 +314,6 @@ def get_youtube_clip(query, output_path, duration=4.0):
         f"ytsearch1:{query} short scene",
     ]
 
-    # Quiet info-fetch options
     ydl_opts_info = {
         'format': 'bestvideo[ext=mp4][height<=1080]+bestaudio[ext=m4a]/best[ext=mp4][height<=1080]/bestvideo+bestaudio/best',
         'noplaylist': True,
@@ -322,6 +321,7 @@ def get_youtube_clip(query, output_path, duration=4.0):
         'no_warnings': True,
         'socket_timeout': 15,  # Don't hang forever
         'extractor_args': {'youtube': ['player_client=ios,tv']},
+        'impersonate': 'chrome',
     }
     
     if os.path.exists("cookies.txt"):
@@ -377,6 +377,7 @@ def get_youtube_clip(query, output_path, duration=4.0):
         'socket_timeout': 20,
         'merge_output_format': 'mp4',
         'extractor_args': {'youtube': ['player_client=ios,tv']},
+        'impersonate': 'chrome',
         # Download only the needed section cleanly (RE-ENCODE)
         # We explicitly omit 'force_keyframes_at_cuts' to ensure ffmpeg re-encodes the snippet
         # cleanly, providing an I-Frame at t=0 so MoviePy doesn't generate grey/glitchy screens!

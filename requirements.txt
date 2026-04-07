@@ -5,6 +5,13 @@ requests
 python-dotenv
 pillow
 numpy
+moviepy==1.0.3
+edge-tts
+google-genai
+requests
+python-dotenv
+pillow
+numpy
 proglog
 imageio
 imageio-ffmpeg
@@ -13,3 +20,4 @@ scipy
 openai-whisper
 yt-dlp
 stable-ts
+curl-cffi
