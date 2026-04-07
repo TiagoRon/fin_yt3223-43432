@@ -1,0 +1,154 @@
+On branch main
+Your branch is up to date with 'origin/main'.
+
+Changes not staged for commit:
+  (use "git add <file>..." to update what will be committed)
+  (use "git restore <file>..." to discard changes in working directory)
+	modified:   gui.py
+	modified:   main.py
+	modified:   src/ai_client.py
+	modified:   src/aligner.py
+	modified:   src/background_generator.py
+	modified:   src/constants.py
+	modified:   src/history_manager.py
+	modified:   src/stock_client.py
+	modified:   src/tts_engine.py
+	modified:   src/video_editor.py
+	modified:   video_history.json
+
+Untracked files:
+  (use "git add <file>..." to include in what will be committed)
+	Script_YT_Videos/
+	asd.py
+	assets/copiar.mp4
+	assets/curiosity.png
+	assets/custom.png
+	assets/darkfacts.png
+	assets/history.png
+	assets/logo.png
+	assets/top3.png
+	assets/whatif.png
+	chrome_profile/
+	debug_file.py
+	debug_output.txt
+	debug_test.py
+	diff.txt
+	diff_ve.txt
+	dump_tts.py
+	e2e_output.txt
+	e2e_test.py
+	fast_sub_test.py
+	generate_comedy_music.py
+	generate_mood_sfx.py
+	generate_sfx.py
+	git_all_changes.txt
+	git_log.txt
+	git_log_5_utf8.txt
+	git_log_all.txt
+	git_log_ascii.txt
+	git_log_utf8.txt
+	git_log_utf8_10.txt
+	git_old_ve.txt
+	git_old_ve_utf8.txt
+	git_pop2.txt
+	git_pop_search.txt
+	gui_flet.py
+	music/dark_tension.wav
+	music/deep_mystery.wav
+	music/emotional_piano.wav
+	music/epic_battle.wav
+	music/upbeat_energy.wav
+	my_log.txt
+	my_status.txt
+	quick_test.py
+	resize_search.txt
+	settings.json
+	sfx/ambient_drone_1.wav
+	sfx/ambient_drone_2.wav
+	sfx/ambient_drone_3.wav
+	sfx/ambient_space_1.wav
+	sfx/ambient_space_2.wav
+	sfx/ambient_wind_1.wav
+	sfx/ambient_wind_2.wav
+	sfx/bass_drop_gen_1.wav
+	sfx/bass_drop_gen_2.wav
+	sfx/boom_gen_1.wav
+	sfx/boom_gen_2.wav
+	sfx/click_gen_1.wav
+	sfx/click_gen_2.wav
+	sfx/click_gen_3.wav
+	sfx/comedy_boing_1.wav
+	sfx/comedy_boing_2.wav
+	sfx/comedy_boing_3.wav
+	sfx/comedy_honk_1.wav
+	sfx/comedy_honk_2.wav
+	sfx/comedy_slide_1.wav
+	sfx/comedy_slide_2.wav
+	sfx/digital_blip_1.wav
+	sfx/digital_blip_2.wav
+	sfx/digital_blip_3.wav
+	sfx/dramatic_reveal_1.wav
+	sfx/dramatic_reveal_2.wav
+	sfx/epic_hit_1.wav
+	sfx/epic_hit_2.wav
+	sfx/epic_hit_3.wav
+	sfx/horror_impact_1.wav
+	sfx/horror_impact_2.wav
+	sfx/horror_stinger_1.wav
+	sfx/horror_stinger_2.wav
+	sfx/horror_stinger_3.wav
+	sfx/horror_whisper_1.wav
+	sfx/horror_whisper_2.wav
+	sfx/mystery_tone_1.wav
+	sfx/mystery_tone_2.wav
+	sfx/mystery_tone_3.wav
+	sfx/record_scratch_1.wav
+	sfx/record_scratch_2.wav
+	sfx/reverse_cymbal_gen_1.wav
+	sfx/reverse_cymbal_gen_2.wav
+	sfx/sad_tone_1.wav
+	sfx/sad_tone_2.wav
+	sfx/sci_fi_scan_1.wav
+	sfx/sci_fi_scan_2.wav
+	sfx/shimmer_gen_1.wav
+	sfx/shimmer_gen_2.wav
+	sfx/shimmer_gen_3.wav
+	sfx/surprise_sting_1.wav
+	sfx/surprise_sting_2.wav
+	sfx/surprise_sting_3.wav
+	sfx/suspense_build_1.wav
+	sfx/suspense_build_2.wav
+	sfx/swoosh_gen_1.wav
+	sfx/swoosh_gen_2.wav
+	sfx/swoosh_gen_3.wav
+	sfx/tension_riser_gen_1.wav
+	sfx/tension_riser_gen_2.wav
+	sfx/thunder_1.wav
+	sfx/thunder_2.wav
+	sfx/wow_riser_1.wav
+	sfx/wow_riser_2.wav
+	src/config_manager.py
+	src/history_helpers.py
+	src/license_manager.py
+	src/localization.py
+	src/upload_manager.py
+	src/upload_utils.py
+	src/uploader.py
+	status.txt
+	test.jpg
+	test_assemble.py
+	test_log_output.txt
+	test_yt_upload.py
+	tmp_diff.txt
+	tmp_find.py
+	tmp_pexels_test.py
+	tmp_pexels_test2.py
+	tmp_pexels_test3.py
+	tmp_pexels_test4.py
+	tmp_pexels_test5.py
+	tmp_status.txt
+	tmp_wiki_test.py
+	tmp_wiki_test_2.py
+	utf8_diff.txt
+
+no changes added to commit (use "git add" and/or "git commit -a")

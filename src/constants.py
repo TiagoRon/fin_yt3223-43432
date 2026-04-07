@@ -57,16 +57,50 @@ TOP_3_TOPICS = [
     "Top 3 lugares donde está prohibido entrar"
 ]
 
+DARK_FACTS_TOPICS = [
+    "El oscuro origen de los cuentos de hadas",
+    "Experimentos médicos clasificados durante la Guerra Fría",
+    "La verdadera historia detrás de Jack el Destripador",
+    "El lado perturbador de la Revolución Industrial",
+    "Pueblos fantasma y sus oscuras historias",
+    "Tecnología antigua que no deberíamos haber olvidado",
+    "Incidentes inexplicables en alta mar",
+    "El sombrío trasfondo de canciones infantiles",
+    "Desapariciones históricas sin resolver",
+    "Sociedades secretas que cambiaron el mundo"
+]
+
+HISTORY_TOPICS = [
+    "El misterio sin resolver de la Colonia Roanoke",
+    "La oscura verdad detrás del hundimiento del Titanic",
+    "Los aterradores secretos de Prípiat y Chernóbil",
+    "La conspiración detrás de la Mona Lisa",
+    "El increíble y único escape real de Alcatraz",
+    "La verdad oculta sobre la vida de Cleopatra",
+    "El vuelo 19 y los secretos del Triángulo de las Bermudas",
+    "El extraño caso del Paso Diátlov",
+    "Los aterradores secretos de la Inquisición",
+    "La verdad histórica del Rey Arturo y Excalibur"
+]
+
+CUSTOM_TOPICS = [
+    "Tema sugerido por la IA",
+    "Curiosidades aleatorias",
+    "Datos poco conocidos del siglo XXI"
+]
+
 # Smart Music Mapping
 # Determine emotion -> Select file
 MUSIC_MOODS = {
-    "mystery": ["the_mystery.mp3", "science_fiction.mp3"],
-    "happy": ["happy_life.mp3"],
-    "epic": ["cinemato.mp3"],
-    "curiosity": ["planning.mp3"],
-    "sad": ["planning.mp3"] # Fallback
+    "mystery": ["the_mystery.mp3", "science_fiction.mp3", "deep_mystery.wav", "dark_tension.wav"],
+    "happy": ["happy_life.mp3", "upbeat_energy.wav"],
+    "epic": ["cinemato.mp3", "epic_battle.wav"],
+    "curiosity": ["planning.mp3", "science_fiction.mp3", "deep_mystery.wav"],
+    "sad": ["planning.mp3", "emotional_piano.wav"],
+    "dark": ["the_mystery.mp3", "science_fiction.mp3", "dark_tension.wav"]
 }
 
 # Branding
-CHANNEL_NAME = "@RapidFacts" # Change this to your channel name
-FONT_PATH = "assets/fonts/Montserrat-ExtraBold.ttf"
+import os
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+FONT_PATH = os.path.join(BASE_DIR, "assets", "fonts", "Montserrat-ExtraBold.ttf")

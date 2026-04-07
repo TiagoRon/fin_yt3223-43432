@@ -11,3 +11,4 @@ imageio-ffmpeg
 decorator
 scipy
 openai-whisper
+yt-dlp

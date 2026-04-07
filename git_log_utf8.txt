@@ -1,0 +1,73 @@
+﻿fe859a7 Optimize memory usage to prevent runner crash
+diff --git a/src/video_editor.py b/src/video_editor.py
+index 6d26ce0..f260cf9 100644
+--- a/src/video_editor.py
++++ b/src/video_editor.py
+@@ -994,6 +994,9 @@ def assemble_video(scenes, music_dir, output_file, title_text=None, mood="myster
+                         # If much larger, resize first close to target height (Optimization)
+                         if c.h > 2000:
+                             c = c.resize(height=1920) 
++                            # Force GC after heavy resize
++                            import gc
++                            gc.collect() 
+                         
+                         # OPTIMIZATION: Always use Center Crop (Fill) for standard 16:9 content.
+                         # The previous "Blurry Background" effect (Composite 2 layers) was doubling the render time per frame.
+@@ -1150,6 +1153,13 @@ def assemble_video(scenes, music_dir, output_file, title_text=None, mood="myster
+             scene_comp = scene_comp.set_audio(audioclip)
+             final_clips.append(scene_comp)
+             
++            # --- MEMORY SAFETY ---
++            # Explicitly clear large objects if possible
++            del full_visual
++            del scene_overlays
++            import gc
++            if idx % 2 == 0: gc.collect() # Collect every 2 scenes
++            
+         if not final_clips: return False
+ 
+         # --- FINAL ASSEMBLY & TRANSITIONS ---
+@@ -1347,7 +1357,7 @@ def assemble_video(scenes, music_dir, output_file, title_text=None, mood="myster
+             audio_codec='aac', 
+             bitrate="8000k", 
+             preset='veryfast',   # Balanced speed/stability
+-            threads=4          # Enable Multithreading
++            threads=1          # SAFE MODE: Reduce threads to prevent OOM on GitHub Runners
+         )
+         # Cleanup Resources
+         try:
+78decb1 Fix video generation crashes, cleanup logic, and metadata saving
+diff --git a/src/video_editor.py b/src/video_editor.py
+index aa51db6..6d26ce0 100644
+--- a/src/video_editor.py
++++ b/src/video_editor.py
+@@ -798,6 +798,10 @@ def create_short(script_data, audio_files, background_dir, music_dir, output_fil
+         bg_path = os.path.join(background_dir, random.choice(bg_files))
+         video_bg = VideoFileClip(bg_path)
+         
++        # ... logic continues ...
++        # Use context manager or explicit close for video_bg later
++
++        
+         if video_bg.duration < total_duration:
+             video_bg = video_bg.loop(duration=total_duration + 1.5)
+             
+@@ -1345,6 +1349,18 @@ def assemble_video(scenes, music_dir, output_file, title_text=None, mood="myster
+             preset='veryfast',   # Balanced speed/stability
+             threads=4          # Enable Multithreading
+         )
++        # Cleanup Resources
++        try:
++            final_video.close()
++            for c in final_clips:
++                try: c.close()
++                except: pass
++            for s in sfx_lib.values():
++                try: s.close()
++                except: pass
++        except:
++            pass
++            
+         return True
+ 
+     except Exception as e:

@@ -1,0 +1,4 @@
+customtkinter
+patool
+selenium
+webdriver-manager

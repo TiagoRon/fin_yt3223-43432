@@ -1,0 +1,64 @@
+﻿diff --git a/main.py b/main.py
+index a507615..a2741af 100644
+--- a/main.py
++++ b/main.py
+@@ -15,7 +15,9 @@ from src.constants import EVERGREEN_TOPICS, WHAT_IF_TOPICS, TOP_3_TOPICS
+ from src.tts_engine import get_random_voice
+ import random
+ 
+-def run_batch(count, topic=None, use_trends=False, style="curiosity", log_func=print):
++def run_batch(count, topic=None, use_trends=False, style="curiosity", log_func=print, 
++              watermark_text="", lang="en", is_test=False, 
++              progress_callback=None, is_cancelled=None, loc=None):
+     
+     # Pre-fetch trends if requested
+     trending_topics = []
+@@ -35,7 +37,16 @@ def run_batch(count, topic=None, use_trends=False, style="curiosity", log_func=p
+     success_count = 0
+ 
+     for i in range(count):
+-        log_func(f"\n--- Generando Video {i+1}/{count} ---")
++        # Cancellation Check
++        if is_cancelled and is_cancelled():
++            log_func(loc.get("status_cancelled") if loc else "Generation cancelled by user.")
++            break
++
++        if progress_callback:
++            msg = (loc.get("status_processing").format(count) if loc else f"Processing {count} video(s)...")
++            progress_callback(i, count, msg)
++
++        log_func(f"\n--- {loc.get('title_generator') if loc else 'Generating Video'} {i+1}/{count} ---")
+         
+         current_hook = None
+         current_topic = topic
+@@ -377,7 +388,7 @@ def run_batch(count, topic=None, use_trends=False, style="curiosity", log_func=p
+         
+         # vid_title and vid_mood calculated above
+         
+-        success = assemble_video(processed_scenes, "music", output_file, title_text=vid_title, mood=vid_mood)
++        success = assemble_video(processed_scenes, "music", output_file, title_text=vid_title, mood=vid_mood, watermark_text=watermark_text)
+         
+         if success:
+             log_func(f"┬í├ëXITO! Video guardado en: {output_file}")
+diff --git a/src/video_editor.py b/src/video_editor.py
+index f260cf9..e79e912 100644
+--- a/src/video_editor.py
++++ b/src/video_editor.py
+@@ -860,7 +860,7 @@ def create_short(script_data, audio_files, background_dir, music_dir, output_fil
+         print(f"Error creating visual comp: {e}")
+         return False
+ 
+-def assemble_video(scenes, music_dir, output_file, title_text=None, mood="mystery"):
++def assemble_video(scenes, music_dir, output_file, title_text=None, mood="mystery", watermark_text=""):
+     """
+     Assembles the final video from a list of processed scenes.
+     OPTIMIZED FOR SPEED: Uses threads, faster preset, and early resizing.
+@@ -1330,7 +1330,7 @@ def assemble_video(scenes, music_dir, output_file, title_text=None, mood="myster
+                  wm_font = ImageFont.load_default()
+                  
+              # Text with shadow
+-             wm_text = CHANNEL_NAME
++             wm_text = watermark_text if watermark_text else CHANNEL_NAME
+              # Shadow
+              wm_draw.text((22, 22), wm_text, font=wm_font, fill=(0,0,0,128))
+              # Main

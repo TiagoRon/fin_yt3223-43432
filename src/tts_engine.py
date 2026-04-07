@@ -5,7 +5,7 @@ import os
 import random
 
 # List of high-quality Spanish Neural voices
-AVAILABLE_VOICES = [
+AVAILABLE_VOICES_ES = [
     "es-MX-DaliaNeural",  # Mexican Female
     "es-ES-AlvaroNeural", # Spanish Male
     "es-AR-TomasNeural",  # Argentine Male
@@ -14,8 +14,20 @@ AVAILABLE_VOICES = [
     "es-US-PalomaNeural"  # US Spanish Female
 ]
 
-def get_random_voice():
-    return random.choice(AVAILABLE_VOICES)
+# List of high-quality English Neural voices
+AVAILABLE_VOICES_EN = [
+    "en-US-JennyNeural",
+    "en-US-GuyNeural",
+    "en-GB-SoniaNeural",
+    "en-GB-RyanNeural",
+    "en-AU-NatashaNeural",
+    "en-AU-WilliamNeural"
+]
+
+def get_random_voice(lang="es"):
+    if lang == "en":
+        return random.choice(AVAILABLE_VOICES_EN)
+    return random.choice(AVAILABLE_VOICES_ES)
 
 async def generate_audio(text, output_file, voice=None):
     """

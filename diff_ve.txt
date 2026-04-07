@@ -1,0 +1,1478 @@
+﻿diff --git a/src/video_editor.py b/src/video_editor.py
+index f260cf9..323aca4 100644
+--- a/src/video_editor.py
++++ b/src/video_editor.py
+@@ -4,9 +4,16 @@ import os
+ from moviepy.audio.fx.all import audio_loop
+ import random
+ import numpy as np
++import math
+ from PIL import Image, ImageDraw, ImageFont, ImageFilter
+ import textwrap
+-from src.constants import MUSIC_MOODS, FONT_PATH, CHANNEL_NAME
++import re
++from src.constants import MUSIC_MOODS, FONT_PATH
++
++# --- VIDEO RESOLUTION ---
++# Change these to switch between 720p and 1080p globally
++VIDEO_WIDTH = 720
++VIDEO_HEIGHT = 1280
+ 
+ # Fix for Pillow 10+ removing ANTIALIAS
+ if not hasattr(Image, 'ANTIALIAS'):
+@@ -34,10 +41,9 @@ class EffectsManager:
+         self.used_middle_effects = []
+         self.last_effect_time = -10
+         
+-        # Select Mandatory Effects
+-        # User requested MANDATORY 'glitch' for Intro (after title) and Outro (end).
+-        self.intro_effect = "glitch_start"
+-        self.outro_effect = "glitch_out"
++        # RANDOMIZE Intro/Outro for uniqueness ÔÇö each video gets different combo
++        self.intro_effect = random.choice(["cinematic_zoom", "flash_in", "glitch_start", "fade_dramatic"])
++        self.outro_effect = random.choice(["glitch_out", "flash_out", "zoom_out_fade"])
+         
+         print(f"   Ô£¿ Intro: {self.intro_effect} | Outro: {self.outro_effect}")
+ 
+@@ -52,26 +58,24 @@ class EffectsManager:
+         Decides if a middle effect should be applied and which one.
+         Returns: effect_name or None
+         """
+-        # Minimum padding between effects (e.g., 5 seconds)
+-        if current_time - self.last_effect_time < 5.0:
++        if current_time - self.last_effect_time < 3.0:
+             return None
+             
+         # Probability based on style
+-        prob = 0.3
+-        if self.current_style == self.STYLE_HIGH_ENERGY: prob = 0.5
+-        elif self.current_style == self.STYLE_SMOOTH: prob = 0.2
+-        elif self.current_style == self.STYLE_MINIMAL: prob = 0.1
++        prob = 0.5
++        if self.current_style == self.STYLE_HIGH_ENERGY: prob = 0.75
++        elif self.current_style == self.STYLE_SMOOTH: prob = 0.45
++        elif self.current_style == self.STYLE_MINIMAL: prob = 0.25
+         
+-        if random.random() > prob and duration < 6.0:
++        if random.random() > prob:
+             return None
+             
+-        # Available effects
+-        # User requested DYNAMIC but NOT NOISY.
+-        # Added: 'soft_zoom', 'slide_left'
+-        opts = ["glitch_mild", "soft_zoom", "slide_left"]
++        # EXPANDED pool ÔÇö 10 effects for maximum variety
++        opts = ["glitch_mild", "soft_zoom", "flash", "shake", "pulse", "speed_ramp",
++                "color_shift", "whip_pan", "vignette_pulse", "zoom_snap"]
+         
+-        # Filter recently used
+-        choices = [o for o in opts if o not in self.used_middle_effects[-2:]]
++        # Don't repeat the last 3 effects
++        choices = [o for o in opts if o not in self.used_middle_effects[-3:]]
+         if not choices: choices = opts
+         
+         effect = random.choice(choices)
+@@ -127,7 +131,7 @@ def _glitch_frame_impl(im, intensity=25):
+ 
+ def create_flash_transition():
+     """Returns a white ColorClip fading out."""
+-    return ColorClip(size=(1080, 1920), color=(255,255,255), duration=0.3).fadeout(0.3)
++    return ColorClip(size=(VIDEO_WIDTH, VIDEO_HEIGHT), color=(255, 255, 255), duration=0.3).fadeout(0.3)
+ 
+ def vfx_glitch_clip(clip, duration=0.4):
+     """
+@@ -140,8 +144,9 @@ def vfx_glitch_clip(clip, duration=0.4):
+     return c.fl_image(_glitch_frame_impl)
+ 
+ def vfx_shake(clip, strength=5):
+-    """Simple random shake effect"""
+-    return clip.set_position(lambda t: (random.randint(-strength, strength), random.randint(-strength, strength)))
++    """Simple random shake effect, scaled up to prevent edge bleed."""
++    c = clip.resize(1.05)  # Scale up slightly so black borders don't show
++    return c.set_position(lambda t: (random.randint(-strength, strength) - int(c.w*0.025), random.randint(-strength, strength) - int(c.h*0.025)))
+ 
+ def vfx_soft_zoom(clip, duration=None, mode="in"):
+     """
+@@ -150,124 +155,11 @@ def vfx_soft_zoom(clip, duration=None, mode="in"):
+     """
+     if duration is None: duration = clip.duration
+     
+-    # OPTIMIZATION: Use Crop instead of Resize per frame (Huge speedup)
+-    # 1. Resize ONCE to target scale (e.g. 1.15x)
+-    # 2. Crop a moving window
+-    
+-    w, h = clip.size
+-    target_scale = 1.15
+-    new_w = int(w * target_scale)
+-    new_h = int(h * target_scale)
+-    
+-    # Resize once
+-    large_clip = clip.resize((new_w, new_h))
+-    
+-    # Define Crop Window Movement
+-    # Mode IN: Start from Center (cropped) -> End at Full?
+-    # Actually Ken Burns "Zoom In" means the view gets smaller relative to image -> Image gets bigger.
+-    # So we view a smaller and smaller portion of the original?
+-    # Or simplified: We have a Big Image. We show a 1080x1920 window.
+-    # Zoom IN: Window starts Large (scaled down to fit) -> Window ends Small (actual pixels).
+-    # That implies per-frame Resize of the window? Yes.
+-    
+-    # RE-THINK:
+-    # "Zoom In" visual effect = The object gets bigger. 
+-    # Implementation: Object scales UP.
+-    # Previous (Slow): clip.resize(t: 1.0 -> 1.15)
+-    #
+-    # Optimization with Crop (Mock Zoom):
+-    # If we have a 1.15x image.
+-    # We can take a 1080x1920 crop.
+-    # If we pan across it, it's a Pan, not Zoom.
+-    # To do a Zoom *without* resize per frame is impossible unless we accept "Pixelated Zoom" (nearest neighbor)? No.
+-    #
+-    # ACTUALLY: MoviePy's 'resize' is slow because it uses PIL.resize every frame.
+-    # Is there a faster way? 
+-    # 'scikit-image' or 'cv2' backends? MoviePy defaults to PIL.
+-    #
+-    # COMPROMISE:
+-    # 1. Make the zoom very subtle (1.05x) and accept the cost?
+-    # 2. OR use a simple Pan (Ken Burns Pan) which IS optimizable via crop.
+-    # The user accepted "Ken Burns" which usually implies Pan & Zoom.
+-    # Let's switch to a "Slow Pan" effect for the images. It looks Cinematic and is 10x faster.
+-    #
+-    # Optimized Pan Logic:
+-    # Resize to 1.1x ONCE.
+-    # Pan from (0,0) to (end, end) or similar.
+-    
+-    extra_scale = 0.10
+-    new_w = int(w * (1 + extra_scale))
+-    new_h = int(h * (1 + extra_scale))
+-    
+-    large_clip = clip.resize((new_w, new_h))
+-    
+-    # Center crop dimensions
+-    x_center = new_w // 2
+-    y_center = new_h // 2
+-    
+-    # We need a 1080x1920 window
+-    # Pan range
+-    max_dx = (new_w - w) // 2
+-    max_dy = (new_h - h) // 2
+-    
++    extra_scale = 0.15 # 15% zoom for aggressive cinematic feel
+     if mode == "in":
+-        # Pan from Top-Left to Center? Or Center to Bottom-Right?
+-        # Let's just do a subtle linear pan.
+-        # From (-dx, -dy) to (dx, dy) relative to center?
+-        # clip.crop expects x1, y1, w, h
+-        
+-        # We use scroll.
+-        # large_clip is 1188x2112. We need 1080x1920.
+-        # Available slack: 108px x 192px.
+-        
+-        return large_clip.fx(vfx.scroll, w=w, h=h, x_speed=10, y_speed=10)
+-        
+-    # BACKTRACK: vfx.scroll is weird loops.
+-    # Let's just stick to the specific lambda crop on the large clip.
+-    # Crop is faster than resize.
+-    
+-    def crop_get_frame(t):
+-        # Linear interp
+-        progress = t / duration
+-        
+-        # Start at Top Left slack, End at Bottom Right slack
+-        # Slack
+-        slack_w = new_w - w
+-        slack_h = new_h - h
+-        
+-        if mode == "in":
+-             # Pan Down-Right
+-             x1 = int(slack_w * progress)
+-             y1 = int(slack_h * progress)
+-        else:
+-             # Pan Up-Left
+-             x1 = int(slack_w * (1-progress))
+-             y1 = int(slack_h * (1-progress))
+-             
+-        return large_clip.crop(x1=x1, y1=y1, width=w, height=h).get_frame(0)
+-        
+-    # Return a VideoClip with the custom make_frame
+-    # Note: 'large_clip' is an ImageClip so get_frame(0) is fast/cached? 
+-    # Actually ImageClip stores img in memory. Crop is fast array slice.
+-    
+-    return VideoFileClip(None) if False else clip.resize(lambda t: 1.0 + 0.05 * (t/duration)) 
+-    
+-    # WAIT. Writing a custom MakeFrame is risky if I get it wrong (user corruption fear).
+-    # The SAFEST optimization is to reduce the zoom amount and ensuring 'preset=veryfast'.
+-    # 50 minutes is definitely primarily due to the SUBTITLES (hundreds of text layers).
+-    # The Ken Burns resize is heavy but for 3-5 images it shouldn't be 50 mins.
+-    #
+-    # Let's revert to a simpler, lighter resize using only 1.05x (less interpolation work?)
+-    # No, work is same.
+-    #
+-    # Decision: Keep the Resize but strictly minimal, AND confirm the Subtitle Fix is the hero.
+-    # I will just clean up the 'extra_scale' variable to be consistent.
+-    
+-    extra_scale = 0.05 # Reduced from 0.15 to 0.05 for speed/subtlety
+-    if mode == "in":
+-        return clip.resize(lambda t: 1 + extra_scale * (t / duration))
++        return clip.resize(lambda t: 1 + extra_scale * (t / max(0.1, duration)))
+     else:
+-        return clip.resize(lambda t: 1.05 - extra_scale * (t / duration))
++        return clip.resize(lambda t: 1 + extra_scale - extra_scale * (t / max(0.1, duration)))
+ 
+ def vfx_slide_transition(clip, start_delay=0, duration=0.5, direction="left"):
+     """
+@@ -391,9 +283,9 @@ def vfx_color_grade(clip, preset="cinematic"):
+     Applies a color grade to make the video look more produced.
+     Standard 'Cinematic' = slight contrast boost + saturation helper.
+     """
+-    # Contrast Boost (lum=0, contrast=0.15) makes it punchy
+-    # This helps differentiate from flat raw stock footage.
+-    return clip.fx(vfx.lum_contrast, lum=0, contrast=0.15, contrast_thr=127)
++    # Softer contrast boost (0.10) plus a tiny brightness boost for vivid colors
++    graded = clip.fx(vfx.lum_contrast, lum=5, contrast=0.10, contrast_thr=127)
++    return graded.fx(vfx.colorx, 1.05)
+ 
+ def vfx_mirror(clip):
+     """
+@@ -402,22 +294,34 @@ def vfx_mirror(clip):
+     """
+     return clip.fx(vfx.mirror_x)
+ 
+-def create_title_card(text, duration=2.5, width=1080, height=1920):
++def create_title_card(text, duration=2.5, width=VIDEO_WIDTH, height=VIDEO_HEIGHT):
+     """
+     Creates a 'Cuadradito' style title badge.
+     Deep Yellow/Orange background box, Black text. 
+-    Appears centered.
++    Appears centered. Auto-scales font for long titles.
+     """
+     if not text: return None
+     
++    # Auto-scale font based on text length
++    text_len = len(text)
++    if text_len <= 25:
++        fontsize = 60
++        wrap_width = 16
++    elif text_len <= 45:
++        fontsize = 48
++        wrap_width = 20
++    elif text_len <= 70:
++        fontsize = 38
++        wrap_width = 26
++    else:
++        fontsize = 32
++        wrap_width = 32
++    
+     # Font Setup
+-    # Font Setup
+-    fontsize = 90
+-    font_path = FONT_PATH  # Use the constant instead of hardcoded Windows path
++    font_path = FONT_PATH
+     try:
+         font = ImageFont.truetype(font_path, fontsize)
+     except IOError:
+-        # Fallback: Try to find any .ttf in assets
+         try:
+             possible_fonts = [f for f in os.listdir("assets/fonts") if f.endswith(".ttf")]
+             if possible_fonts:
+@@ -428,8 +332,11 @@ def create_title_card(text, duration=2.5, width=1080, height=1920):
+         except:
+             font = ImageFont.load_default()
+         
+-    # Wrap text
+-    lines = textwrap.wrap(text, width=18)
++    # Wrap text ÔÇö limit to 4 lines max to keep it clean
++    lines = textwrap.wrap(text, width=wrap_width)
++    if len(lines) > 4:
++        lines = lines[:4]
++        lines[-1] = lines[-1][:len(lines[-1])-3] + "..."
+     
+     # Measure Text
+     img_temp = Image.new('RGBA', (1, 1))
+@@ -445,14 +352,14 @@ def create_title_card(text, duration=2.5, width=1080, height=1920):
+         h = bbox[3] - bbox[1]
+         max_w = max(max_w, w)
+         line_metrics.append((w, h))
+-        total_text_h += h + 15 # Line spacing
++        total_text_h += h + 15
+     
+-    total_text_h -= 15 # Remove last spacing
++    total_text_h -= 15
+     
+     # Box Dimensions (Padding)
+     pad_x = 40
+     pad_y = 30
+-    box_w = max_w + (pad_x * 2)
++    box_w = min(max_w + (pad_x * 2), width - 60)  # Don't exceed screen width
+     box_h = total_text_h + (pad_y * 2)
+     
+     # Draw Final Image
+@@ -465,8 +372,7 @@ def create_title_card(text, duration=2.5, width=1080, height=1920):
+     box_x2 = box_x1 + box_w
+     box_y2 = box_y1 + box_h
+     
+-    # Draw "Cuadradito" (Rounded Rect logic manually or just rect)
+-    # Yellow/Gold Background
++    # Draw "Cuadradito" (Yellow/Gold Background)
+     draw.rectangle([box_x1, box_y1, box_x2, box_y2], fill="#FFC107", outline="white", width=4)
+     
+     # Draw Text
+@@ -480,20 +386,19 @@ def create_title_card(text, duration=2.5, width=1080, height=1920):
+         curr_y += h + 15
+         
+     # Clip
+-    clip = ImageClip(np.array(img)).set_duration(duration).set_position(("center", 350))
++    clip = ImageClip(np.array(img)).set_duration(duration).set_position(("center", int(height * 0.27)))
+     
+-    # Animation: Slide Up or Just Pop
+-    # Let's do a simple pop in
++    # Animation: Pop in
+     clip = clip.resize(lambda t: min(1, 0.8 + 2*t) if t < 0.1 else 1)
+     
+     return clip
+ 
+-def create_karaoke_clips(word_timings, duration, start_offset, width=1080, height=1920, fontsize=110, raw_text="", is_header=False):
++def create_karaoke_clips(word_timings, duration, start_offset, width=VIDEO_WIDTH, height=VIDEO_HEIGHT, fontsize=75, raw_text="", is_header=False):
+     # Professional Shorts Style: Single Line Focused
+     if is_header:
+-        fontsize = 90 # Slightly smaller to fit box
++        fontsize = 60 # Slightly smaller to fit box
+     else:
+-        fontsize = 110 # Bigger
++        fontsize = 75 # Bigger
+     
+     # Load Font - Custom Branding
+     font_path = FONT_PATH
+@@ -526,8 +431,8 @@ def create_karaoke_clips(word_timings, duration, start_offset, width=1080, heigh
+ 
+     # Pre-calculate Layout (Map words to lines)
+     if is_header:
+-        # Box header: Allow slightly wider lines
+-        chars_per_line = 20
++        # Match subtitles punchy style
++        chars_per_line = 12
+     else:
+         # If fallback to default font (PIL default is tiny), we need huge adjustments or it will be unreadable.
+         # But load_default() returns a font object that might behave differently.
+@@ -546,6 +451,7 @@ def create_karaoke_clips(word_timings, duration, start_offset, width=1080, heigh
+     
+     # Prepare full_text
+     full_text = raw_text if raw_text else ""
++    full_text = re.sub(r'[^\w\s\.,!?\'"()\-:;├í├®├¡├│├║├ü├ë├ì├ô├Ü├▒├æ├╝├£┬┐┬í&$+=\\/%]', '', full_text)
+     
+     if not full_text and not word_timings:
+         return []
+@@ -560,6 +466,8 @@ def create_karaoke_clips(word_timings, duration, start_offset, width=1080, heigh
+         for w_data in word_timings:
+             # 1. Strip whitespace
+             raw_w = w_data.get('word', '').strip()
++            # Clean Emojis to prevent empty square boxes in output
++            raw_w = re.sub(r'[^\w\s\.,!?\'"()\-:;├í├®├¡├│├║├ü├ë├ì├ô├Ü├▒├æ├╝├£┬┐┬í&$+=\\/%]', '', raw_w)
+             if not raw_w: continue # Skip empty/silence
+             
+             # 2. Check for internal spaces
+@@ -594,11 +502,19 @@ def create_karaoke_clips(word_timings, duration, start_offset, width=1080, heigh
+     # Re-generate full_text strictly from sanitized list to ensure 100% match
+     full_text = " ".join([w['word'] for w in word_timings])
+ 
+-    if not full_text:
+-        return []
+-
+-    lines_strings = textwrap.wrap(full_text, width=chars_per_line)
++    # 1. Break text into logical clauses based on punctuation
++    # This ensures lines don't break unnaturally across sentences
++    clauses = re.split(r'(?<=[.!?])\s+', full_text)
+     
++    wrap_width = 25 if is_header else max(15, chars_per_line)
++    lines_strings = []
++    
++    for clause in clauses:
++        if not clause.strip(): continue
++        # 2. Wraps the clause if it's longer than wrap_width
++        wrapped = textwrap.wrap(clause, width=wrap_width, break_long_words=False)
++        lines_strings.extend(wrapped)
++        
+     # Map global word index to (line_index, word_in_line_index, line_string)
+     word_map = {} 
+     
+@@ -653,17 +569,20 @@ def create_karaoke_clips(word_timings, duration, start_offset, width=1080, heigh
+             
+     # Colors
+     if is_header:
+-        active_color = "black" 
++        active_color = "white" # Pops cleanly inside yellow
+         default_color = "black" 
+-        box_color = "#FFC107"
+-        box_border = "white"
+-        stroke_width = 0 
++        box_color = "#FFC107" # Smooth Yellow
++        box_border = "black" 
++        stroke_width = 5 
++        stroke_color = "black"
++        shadow_offset = (5, 5)
++        shadow_color = "black"
+     else:
+         active_color = "#FFD700" # Gold
+         default_color = "white"
+         stroke_color = "black"
+-        stroke_width = 8 
+-        shadow_offset = (8, 8)
++        stroke_width = 5 
++        shadow_offset = (5, 5)
+         shadow_color = "black"
+ 
+     # --- OPTIMIZATION: Generate Single Concatenated Track ---
+@@ -677,8 +596,17 @@ def create_karaoke_clips(word_timings, duration, start_offset, width=1080, heigh
+         end = w['end'] + start_offset
+         
+         if start < prev_end:
+-            start = max(start, prev_end)
+-        if end <= start: end = start + 0.1 
++            start = prev_end # Avoid overlap back-shifting
++        if end <= start: 
++            end = start + 0.1 
++            
++        # MAGNETIC GAPS: Close very small gaps between words to prevent flashing
++        if i > 0 and start > prev_end:
++            gap_dur = start - prev_end
++            if gap_dur < 2.0: # Keep text on screen during natural pauses (up to 2s)
++                final_timings[-1]['end'] = start
++                final_timings[-1]['duration'] = final_timings[-1]['end'] - final_timings[-1]['start']
++                prev_end = start
+         
+         gap = start - prev_end
+         if gap < 0: gap = 0 
+@@ -695,18 +623,13 @@ def create_karaoke_clips(word_timings, duration, start_offset, width=1080, heigh
+ 
+     # 2. Build Clip Sequence
+     clips_sequence = []
+-    
+-    # Initial Gap from 0 to first word
+-    if final_timings and final_timings[0]['start'] > 0:
+-        clips_sequence.append(ColorClip(size=(width, height), color=(0,0,0,0), duration=final_timings[0]['start']))
+-        
++            
+     for ft in final_timings:
+-        # Add Gap
+-        if ft['gap_before'] > 0.05:
++        if ft['gap_before'] > 0.001:
+             clips_sequence.append(ColorClip(size=(width, height), color=(0,0,0,0), duration=ft['gap_before']))
+             
+-        # Add Word Frame
+         orig_i = ft['original_idx']
++        
+         if orig_i not in word_map: continue
+         
+         mapping = word_map[orig_i]
+@@ -716,66 +639,164 @@ def create_karaoke_clips(word_timings, duration, start_offset, width=1080, heigh
+         
+         line_font = line_font_map.get(l_idx, font)
+         
+-        # Draw Frame
+-        img = Image.new('RGBA', (width, height), (0, 0, 0, 0))
+-        draw = ImageDraw.Draw(img)
++        img_base = Image.new('RGBA', (width, height), (0, 0, 0, 0))
++        draw_base = ImageDraw.Draw(img_base)
+         
+         full_line_lbl = " ".join(current_line_words)
+-        bbox = draw.textbbox((0, 0), full_line_lbl, font=line_font)
+-        line_w = bbox[2] - bbox[0]
++        bbox = draw_base.textbbox((0, 0), full_line_lbl, font=line_font)
++        line_w = 0
+         line_h = bbox[3] - bbox[1]
++        for w_idx, w_txt in enumerate(current_line_words):
++             w_bbox = draw_base.textbbox((0, 0), w_txt, font=line_font)
++             line_w += (w_bbox[2] - w_bbox[0])
++             if w_idx < len(current_line_words) - 1:
++                 line_w += draw_base.textlength(" ", font=line_font)
++        line_w = int(line_w)
+         
+-        # Position
+         if is_header:
+-             start_y = 350
++            start_y = int(height * 0.27)
+         else:
+-             start_y = (height - line_h) // 2
+-             
+-        # Draw Words
++            start_y = (height - line_h) // 2
++            
+         current_x = (width - line_w) // 2
+         
+-        # Draw Header Box if needed
++        # Draw Aesthetic Yellow Box for Header
+         if is_header:
+-             pad = 20
+-             draw.rounded_rectangle(
+-                 [current_x - pad, start_y - pad, current_x + line_w + pad, start_y + line_h + pad],
+-                 radius=15, fill=box_color, outline=box_border, width=3
++             pad = 40 
++             bbox_full = draw_base.textbbox((current_x, start_y), full_line_lbl, font=line_font)
++             true_top = bbox_full[1]
++             true_bottom = bbox_full[3]
++             draw_base.rounded_rectangle(
++                 [current_x - pad, true_top - pad, current_x + line_w + pad, true_bottom + pad],
++                 radius=20, fill=box_color, outline=box_border, width=5
+              )
++        
++        active_word_x = 0
++        active_word_y = start_y
++        active_word_txt = ""
+              
+         for w_idx, w_txt in enumerate(current_line_words):
+-             # Color logic
+              if w_idx == active_word_in_line:
+-                 fill = active_color
++                 active_word_x = current_x
++                 active_word_txt = w_txt
+              else:
+                  fill = default_color
+-                 
+-             # Draw Stroke (Manual)
+-             if not is_header and stroke_width > 0:
+-                 min_range = -stroke_width
+-                 max_range = stroke_width + 1
+-                 # Optim: Draw fewer strokes? (Corners only + centers)
+-                 # Full stroke
+-                 for dx in range(min_range, max_range, 2): # Skip pixels for speed
+-                     for dy in range(min_range, max_range, 2):
+-                         # Approx stroke
+-                         draw.text((current_x + dx, start_y + dy), w_txt, font=line_font, fill=stroke_color)
+-                 # Shadow
+-                 draw.text((current_x + shadow_offset[0], start_y + shadow_offset[1]), w_txt, font=line_font, fill=shadow_color)
+-             
+-             # Draw Text
+-             draw.text((current_x, start_y), w_txt, font=line_font, fill=fill)
++                 if stroke_width > 0 and not is_header:
++                     for angle in range(0, 360, 15):
++                         rad = math.radians(angle)
++                         dx = int(math.cos(rad) * stroke_width)
++                         dy = int(math.sin(rad) * stroke_width)
++                         draw_base.text((current_x + dx, start_y + dy), w_txt, font=line_font, fill=stroke_color)
++                     draw_base.text((current_x + shadow_offset[0], start_y + shadow_offset[1]), w_txt, font=line_font, fill=shadow_color)
++                 draw_base.text((current_x, start_y), w_txt, font=line_font, fill=fill)
+              
+-             w_bbox = draw.textbbox((0, 0), w_txt, font=line_font)
++             w_bbox = draw_base.textbbox((0, 0), w_txt, font=line_font)
+              w_w = w_bbox[2] - w_bbox[0]
+-             space_w = draw.textlength(" ", font=line_font)
++             space_w = draw_base.textlength(" ", font=line_font)
+              current_x += w_w + space_w
+              
+-        # Create Clip
+-        txt_clip = ImageClip(np.array(img)).set_duration(ft['duration'])
++        base_clip = ImageClip(np.array(img_base)).set_duration(ft['duration'])
++        
++        if active_word_txt:
++            a_bbox = draw_base.textbbox((0, 0), active_word_txt, font=line_font)
++            pad = 50 
++            a_w = int(a_bbox[2] - a_bbox[0]) + (stroke_width*2) + pad*2 
++            a_h = int(a_bbox[3] - a_bbox[1]) + (stroke_width*2) + shadow_offset[1] + pad*2
++            
++            img_active = Image.new('RGBA', (a_w, a_h), (0, 0, 0, 0))
++            draw_active = ImageDraw.Draw(img_active)
++            
++            local_x = pad - a_bbox[0]
++            local_y = pad - a_bbox[1]
++            
++            if stroke_width > 0 and not is_header:
++                 for angle in range(0, 360, 15):
++                     rad = math.radians(angle)
++                     dx = int(math.cos(rad) * stroke_width)
++                     dy = int(math.sin(rad) * stroke_width)
++                     draw_active.text((local_x + dx, local_y + dy), active_word_txt, font=line_font, fill=stroke_color)
++                 draw_active.text((local_x + shadow_offset[0], local_y + shadow_offset[1]), active_word_txt, font=line_font, fill=shadow_color)
++            
++            draw_active.text((local_x, local_y), active_word_txt, font=line_font, fill=active_color)
++            
++            active_clip = ImageClip(np.array(img_active)).set_duration(ft['duration'])
++            
++            word_dur = ft['duration']
++            def pop_scale(t):
++                # Professional 'Overshoot' Pop (Alex Hormozi style)
++                if t < 0.1:
++                    return 1.0 + 2.5 * t  # Rapid scale up to 1.25
++                elif t < 0.2:
++                    return 1.25 - 1.0 * (t - 0.1)  # Settle back down to 1.15
++                else:
++                    return 1.15  # Hold slightly larger
++                
++            active_clip = active_clip.resize(pop_scale)
++            comp_x = active_word_x - local_x
++            comp_y = active_word_y - local_y
++            
++            # Maintain center while scaling
++            def dynamic_pos(t):
++                scale = pop_scale(t)
++                new_w = a_w * scale
++                new_h = a_h * scale
++                return (comp_x + a_w/2.0 - new_w/2.0, comp_y + a_h/2.0 - new_h/2.0)
++                
++            txt_clip = CompositeVideoClip([base_clip, active_clip.set_position(dynamic_pos)])
++        else:
++            txt_clip = base_clip
++            
+         clips_sequence.append(txt_clip)
+         
+     if not clips_sequence: return []
+     
++    # --- STATIC TAIL FOR HEADERS ---
++    if is_header and duration > final_timings[-1]['end']:
++        tail_dur = duration - final_timings[-1]['end']
++        if tail_dur > 0.1:
++            # We must redraw the last line completely in default colors so the last word doesn't vanish
++            mapping = word_map[final_timings[-1]['original_idx']]
++            last_line_words = mapping["line_words"]
++            l_idx = mapping["line_idx"]
++            line_font = line_font_map.get(l_idx, font)
++            
++            img_tail = Image.new('RGBA', (width, height), (0, 0, 0, 0))
++            draw_tail = ImageDraw.Draw(img_tail)
++            
++            full_line_lbl = " ".join(last_line_words)
++            bbox = draw_tail.textbbox((0, 0), full_line_lbl, font=line_font)
++            line_w = 0
++            for w_idx, w_txt in enumerate(last_line_words):
++                 w_bbox = draw_tail.textbbox((0, 0), w_txt, font=line_font)
++                 line_w += (w_bbox[2] - w_bbox[0])
++                 if w_idx < len(last_line_words) - 1:
++                     line_w += draw_tail.textlength(" ", font=line_font)
++            line_w = int(line_w)
++            
++            start_y = int(height * 0.27)
++            current_x = (width - line_w) // 2
++            
++            # Draw aesthetic yellow box for tail
++            pad = 40 
++            bbox_full = draw_tail.textbbox((current_x, start_y), full_line_lbl, font=line_font)
++            true_top = bbox_full[1]
++            true_bottom = bbox_full[3]
++            draw_tail.rounded_rectangle(
++                [current_x - pad, true_top - pad, current_x + line_w + pad, true_bottom + pad],
++                radius=20, fill=box_color, outline=box_border, width=5
++            )
++            
++            # Draw all words in default color for the tail
++            for w_txt in last_line_words:
++                 draw_tail.text((current_x, start_y), w_txt, font=line_font, fill=default_color)
++                 w_bbox = draw_tail.textbbox((0, 0), w_txt, font=line_font)
++                 w_w = w_bbox[2] - w_bbox[0]
++                 space_w = draw_tail.textlength(" ", font=line_font)
++                 current_x += w_w + space_w
++                 
++            base_tail = ImageClip(np.array(img_tail)).set_duration(tail_dur)
++            clips_sequence.append(base_tail)
++            
+     # Concatenate to single track
+     # Use chain because all are same size (width, height)
+     final_track = concatenate_videoclips(clips_sequence, method="chain")
+@@ -811,7 +832,7 @@ def create_short(script_data, audio_files, background_dir, music_dir, output_fil
+             new_w = int(video_bg.h * target_ratio)
+             video_bg = video_bg.crop(x1=video_bg.w/2 - new_w/2, width=new_w, height=video_bg.h)
+             
+-        video_bg = video_bg.resize(height=1920)
++        video_bg = video_bg.resize(height=VIDEO_HEIGHT)
+         video_bg = video_bg.subclip(0, total_duration)
+ 
+         # Slow Zoom (Ken Burns) - REMOVED for Performance (Causes 30min+ render times)
+@@ -825,7 +846,7 @@ def create_short(script_data, audio_files, background_dir, music_dir, output_fil
+         for i, audioclip in enumerate(audio_clips):
+             txt = texts[i]
+             dur = audioclip.duration
+-            word_clips = create_karaoke_clips(txt, dur, current_time, width=1080, height=1920)
++            word_clips = create_karaoke_clips(txt, dur, current_time, width=VIDEO_WIDTH, height=VIDEO_HEIGHT)
+             subtitle_clips.extend(word_clips)
+             current_time += dur
+ 
+@@ -842,8 +863,8 @@ def create_short(script_data, audio_files, background_dir, music_dir, output_fil
+                 final_audio = CompositeAudioClip([full_audio, music.volumex(0.15)])
+ 
+         final_layers = [video_bg] + subtitle_clips
+-        final = CompositeVideoClip(final_layers, size=(1080, 1920)).set_audio(final_audio)
+-        final.write_videofile(output_file, fps=30, codec='libx264', audio_codec='aac', bitrate="8000k", preset='medium', threads=2)
++        final = CompositeVideoClip(final_layers, size=(VIDEO_WIDTH, VIDEO_HEIGHT)).set_audio(final_audio)
++        final.write_videofile(output_file, fps=30, codec='libx264', audio_codec='aac', bitrate="5000k", preset='fast', threads=4)
+         
+         # Cleanup
+         final.close()
+@@ -860,19 +881,24 @@ def create_short(script_data, audio_files, background_dir, music_dir, output_fil
+         print(f"Error creating visual comp: {e}")
+         return False
+ 
+-def assemble_video(scenes, music_dir, output_file, title_text=None, mood="mystery"):
++def assemble_video(scenes, music_dir, output_file, title_text=None, mood="mystery", watermark_text="", is_cancelled=None, progress_callback=None):
+     """
+     Assembles the final video from a list of processed scenes.
+     OPTIMIZED FOR SPEED: Uses threads, faster preset, and early resizing.
+     """
+     try:
++        if not scenes:
++            print("ÔØî No scenes provided to assemble_video. Aborting.")
++            return False
++            
+         final_clips = []
+         
+         # Initialize Style
+         style_mgr = EffectsManager()
+         
+         # --- LOAD SFX LIBRARY ---
+-        sfx_dir = "sfx"
++        _project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
++        sfx_dir = os.path.join(_project_root, "sfx")
+         sfx_lib = {}
+         if os.path.exists(sfx_dir):
+             for f in os.listdir(sfx_dir):
+@@ -880,29 +906,17 @@ def assemble_video(scenes, music_dir, output_file, title_text=None, mood="myster
+                 if not (f.endswith('.wav') or f.endswith('.mp3')): continue
+                 try:
+                     clip = AudioFileClip(os.path.join(sfx_dir, f))
+-                    # Volume Normalization - User requested pleasant/subtle
+-                    # Significantly reduced volume to avoid "ugly" feedback
+-                    clip = clip.volumex(0.12)
++                    # Store at FULL volume ÔÇö volume control happens where SFX are applied
+                     sfx_lib[name] = clip
+                 except Exception as ex:
+                     print(f"Failed to load SFX {f}: {ex}")
++            print(f"SFX Library loaded: {len(sfx_lib)} effects from {sfx_dir}")
++        else:
++            print(f"WARNING: SFX directory not found at {sfx_dir}")
+ 
+         # Helper to get random SFX by type
+         def get_sfx(kind):
+-            # USER REQUEST: remove loud noises (whoosh, impact, riser).
+-            # Only allow 'glitch' and 'pop' (simulating soft photo/click).
+-            
+-            allowed_types = ['glitch', 'pop']
+-            
+-            # If the requested kind is NOT allowed, try to map it to a soft one or return None
+-            if kind not in allowed_types:
+-                if kind == 'camera' or 'click' in kind:
+-                    kind = 'pop' # Fallback to pop for "photo" sound
+-                elif 'glitch' in kind:
+-                    kind = 'glitch'
+-                else:
+-                    return None # Block loud sounds like whoosh/impact/riser
+-            
++            # Extended SFX library: all types are now available but at subtle volumes
+             matches = [k for k in sfx_lib.keys() if kind in k]
+             if matches:
+                 # Prefer generated ones if available for variety
+@@ -944,30 +958,33 @@ def assemble_video(scenes, music_dir, output_file, title_text=None, mood="myster
+                 if is_image:
+                      # KEN BURNS IMAGE
+                      try:
+-                         # Load Image
+-                         img = ImageClip(vp)
++                         # Load Image ensuring RGB to prevent NumPy broadcast crashes
++                         pil_img = Image.open(vp).convert('RGB')
++                         img = ImageClip(np.array(pil_img))
+                          needed_dur = clip_duration_target + 0.5
+                          img = img.set_duration(needed_dur)
+                          
+                          # Resize to minimal covering dimension (Cover)
+-                         ratio = 1080 / 1920
++                         ratio = VIDEO_WIDTH / VIDEO_HEIGHT
+                          img_ratio = img.w / img.h
+                          
+                          if img_ratio > ratio:
+                              # Wider: Resize to Height=1920, Crop Width
+-                             img = img.resize(height=1920)
++                             img = img.resize(height=VIDEO_HEIGHT)
+                              # Center Crop initial
+-                             img = img.crop(x1=(img.w - 1080)/2, width=1080, height=1920)
++                             img = img.crop(x_center=img.w/2, width=VIDEO_WIDTH, height=VIDEO_HEIGHT)
+                          else:
+                              # Taller: Resize to Width=1080, Crop Height
+-                             img = img.resize(width=1080)
+-                             img = img.crop(y1=(img.h - 1920)/2, width=1080, height=1920)
++                             img = img.resize(width=VIDEO_WIDTH)
++                             img = img.crop(y_center=img.h/2, width=VIDEO_WIDTH, height=VIDEO_HEIGHT)
+                              
+-                         # Apply Ken Burns (Slow Zoom)
+-                         # 1.0 -> 1.15
++                         # Apply Ken Burns (Slow Zoom + Center Lock)
+                          img = vfx_soft_zoom(img, duration=needed_dur, mode=random.choice(["in", "out"]))
+                          
+                          c = img
++                         # STRICT CANVAS LOCK: prevents canvas swelling in external concatenate
++                         # Lambda centering anchors the zoom in real-time, preventing black bars
++                         c = CompositeVideoClip([c.set_position(lambda t: ('center', 'center'))], size=(VIDEO_WIDTH, VIDEO_HEIGHT)).set_duration(needed_dur)
+                          print(f"      ­ƒô© Converted Image to Clip (Ken Burns): {os.path.basename(vp)}")
+                          
+                      except Exception as e_img:
+@@ -987,13 +1004,13 @@ def assemble_video(scenes, music_dir, output_file, title_text=None, mood="myster
+                         continue
+                     
+                     # 9:16 Crop/Fill - OPTIMIZED: Resize immediately to avoid processing 4k
+-                    target_ratio = 1080 / 1920
++                    target_ratio = VIDEO_WIDTH / VIDEO_HEIGHT
+                     
+-                    if c.w != 1080 or c.h != 1920:
++                    if c.w != VIDEO_WIDTH or c.h != VIDEO_HEIGHT:
+                         # Only resize if needed (Logic for dynamic resize/crop)
+                         # If much larger, resize first close to target height (Optimization)
+                         if c.h > 2000:
+-                            c = c.resize(height=1920) 
++                            c = c.resize(height=VIDEO_HEIGHT) 
+                             # Force GC after heavy resize
+                             import gc
+                             gc.collect() 
+@@ -1002,17 +1019,20 @@ def assemble_video(scenes, music_dir, output_file, title_text=None, mood="myster
+                         # The previous "Blurry Background" effect (Composite 2 layers) was doubling the render time per frame.
+                         # For stock footage (atmosphere, people), Center Crop is standard for Shorts.
+                         
+-                        input_ratio = c.w / c.h
+-                        target_ratio = 1080 / 1920
++                        w, h = c.size
++                        input_ratio = w / float(h)
++                        target_ratio = VIDEO_WIDTH / float(VIDEO_HEIGHT)
+                          
+                         if input_ratio > target_ratio:
+                             # Input is "wider" than target (e.g. 16:9 vs 9:16) -> Fill Height, Crop Sides
+-                            c = c.resize(height=1920)
+-                            c = c.crop(x1=(c.w - 1080)/2, width=1080, height=1920)
++                            new_w = int(w * (float(VIDEO_HEIGHT) / h) + 2) # Adding 2px buffer to prevent float cutoff
++                            c = c.resize(newsize=(new_w, VIDEO_HEIGHT))
++                            c = c.crop(x_center=c.w/2, width=VIDEO_WIDTH, height=VIDEO_HEIGHT)
+                         else:
+                             # Input is "taller" than target (rare/skinny) -> Fill Width, Crop Top/Bottom
+-                            c = c.resize(width=1080)
+-                            c = c.crop(y1=(c.h - 1920)/2, width=1080, height=1920)
++                            new_h = int(h * (float(VIDEO_WIDTH) / w) + 2)
++                            c = c.resize(newsize=(VIDEO_WIDTH, new_h))
++                            c = c.crop(y_center=c.h/2, width=VIDEO_WIDTH, height=VIDEO_HEIGHT)
+                 
+                 # --- NEW ORIGINALITY FILTERS ---
+                 # 1. Color Grading (Cinematic Style)
+@@ -1022,27 +1042,38 @@ def assemble_video(scenes, music_dir, output_file, title_text=None, mood="myster
+                 if random.random() < 0.5:
+                     c = vfx_mirror(c)
+ 
+-                # 3. (REMOVED) Floating Image Overlay 
+-                # User feedback: "No tiene sentido meter una imagen arriba".
+-                # We now prioritize full-screen images in the main loop logic (processed above).
+-                
+-                scene_v_clips.append(c)
+-
+                 # Duration Loop
+                 needed_dur = clip_duration_target + 0.5 
+                 if c.duration < needed_dur: c = c.loop(duration=needed_dur)
+                 else: c = c.subclip(0, needed_dur)
+ 
+-                # --- APPLY STYLE MOVEMENT ---
+-                # OPTIMIZATION: Dynamic resize/position (lambda t) forces full frame re-render.
+-                # Removing complex movements to fix "30 min render time" issue.
++                # --- APPLY FAST PACING (STATIC PUNCH ZOOMS + CONSTANT MOTION) ---
++                # Apply subtle slow zoom on EVERY clip for constant movement
++                if not is_image:  # Images already have Ken Burns
++                    zoom_dir = random.choice(["in", "out"])
++                    c = vfx_soft_zoom(c, duration=needed_dur, mode=zoom_dir)
++                    # Re-lock to canvas after zoom
++                    c = CompositeVideoClip([c.set_position(lambda t: ('center', 'center'))], size=(VIDEO_WIDTH, VIDEO_HEIGHT)).set_duration(needed_dur)
+                 
+-                # Simple static or very basic crop is much faster.
+-                # For now, we kept it static or simple crop.
+-                pass 
++                # Dynamic snap zoom variation on top of slow zoom
++                zoom_factor = 1.0
++                if i % 3 == 1:
++                    zoom_factor = 1.15  # Punch in 15%
++                elif i % 3 == 2:
++                    zoom_factor = 1.08  # Micro punch 8%
+                 
+-                # Grading (Subtle) - Removed for speed
+-                # c = c.fx(vfx.colorx, random.uniform(1.0, 1.1)) 
++                if zoom_factor > 1.0:
++                    def snap_zoom(t):
++                        # Quick snap in first 0.3s
++                        if t < 0.3:
++                            progress = t / 0.3
++                            # Smooth ease out
++                            eased = 1.0 - (1.0 - progress)**3
++                            return 1.0 + (zoom_factor - 1.0) * eased
++                        return zoom_factor
++                    
++                    c = c.resize(snap_zoom)
++                    c = CompositeVideoClip([c.set_position(lambda t: ('center', 'center'))], size=(VIDEO_WIDTH, VIDEO_HEIGHT)).set_duration(needed_dur)
+                 
+                 scene_v_clips.append(c)
+                 
+@@ -1071,61 +1102,116 @@ def assemble_video(scenes, music_dir, output_file, title_text=None, mood="myster
+             if effect_type:
+                 if effect_type == "glitch_mild":
+                     glitched_part = vfx_glitch_clip(full_visual, duration=0.4)
+-                    full_visual = CompositeVideoClip([full_visual, glitched_part.set_start(0)], size=(1080,1920))
+-                    # Pleasant SFX: Very quiet glitch
+-                    sfx = get_sfx('glitch_gen') # Use generated ones if possible, usually cleaner
+-                    if not sfx: sfx = get_sfx('glitch')
+-                    if sfx: audioclip = CompositeAudioClip([audioclip, sfx.set_start(0).volumex(0.1)])
++                    full_visual = CompositeVideoClip([full_visual, glitched_part.set_start(0)], size=(VIDEO_WIDTH,VIDEO_HEIGHT))
++                    sfx = get_sfx('glitch_gen') or get_sfx('glitch')
++                    if sfx: audioclip = CompositeAudioClip([audioclip, sfx.set_start(0).volumex(0.20)])
+                     effect_applied = True
+                     
+                 elif effect_type == "shake":
+                     full_visual = vfx_shake(full_visual, strength=8)
+-                    # Pleasant: Soft impact/whoosh instead of hard hit
+-                    sfx = get_sfx('pop') 
+-                    if sfx: audioclip = CompositeAudioClip([audioclip, sfx.set_start(0).volumex(0.15)])
++                    sfx = get_sfx('swoosh')
++                    if sfx: audioclip = CompositeAudioClip([audioclip, sfx.set_start(0).volumex(0.18)])
+                     effect_applied = True
+ 
+                 elif effect_type == "pulse":
+-                    # Flash of brightness at start
+                     pulse = full_visual.subclip(0, 0.3).fx(vfx.colorx, 1.4)
+                     rest = full_visual.subclip(0.3)
+                     full_visual = concatenate_videoclips([pulse, rest])
+-                    # Pleasant: Pop
+-                    sfx = get_sfx('pop')
+-                    if sfx: audioclip = CompositeAudioClip([audioclip, sfx.set_start(0).volumex(0.15)])
++                    sfx = get_sfx('bass_drop') or get_sfx('epic_hit') or get_sfx('boom')
++                    if sfx: audioclip = CompositeAudioClip([audioclip, sfx.set_start(0).volumex(0.20)])
+                     effect_applied = True
+                     
+                 elif effect_type == "soft_zoom":
+-                     # Apply Ken Burns
+                      full_visual = vfx_soft_zoom(full_visual, duration=duration, mode=random.choice(["in", "out"]))
+-                     # No specific SFX needed, or maybe very faint ambience? 
+-                     # User wants "dynamic" but "no noise". Silence is fine for zoom.
+-                     # Or subtle pop if it marks a transition? Let's keep it silent/clean.
++                     # Subtle shimmer on zoom
++                     sfx = get_sfx('shimmer')
++                     if sfx: audioclip = CompositeAudioClip([audioclip, sfx.set_start(0.2).volumex(0.12)])
+                      effect_applied = True
+                      
+-                elif effect_type == "slide_left":
+-                     # Slide this clip IN over the previous one?
+-                     # Since we are iterating clips, 'full_visual' is the current clip.
+-                     # If we slide it in, it reveals... what? Black?
+-                     # Actually, a slide transition usually requires overlap with previous clip.
+-                     # BUT since `assemble_video` concatenates them sequentially without overlap logic here easily,
+-                     # we can simulate a "Push" by just animating the entry of this clip, 
+-                     # assuming the previous clip ended cleanly.
+-                     
+-                     # It will look like it slides in from black (or background).
+-                     # Better than nothing.
+-                     full_visual = vfx_slide_transition(full_visual, duration=0.6, direction="left")
+-                     
+-                     # SFX: Soft swish -> use 'pop' or silence.
+-                     # Let's use pop or nothing.
+-                     sfx = get_sfx('pop')
+-                     if sfx: audioclip = CompositeAudioClip([audioclip, sfx.set_start(0).volumex(0.1)])
++                elif effect_type == "flash":
++                     flash = create_flash_transition()
++                     full_visual = CompositeVideoClip([full_visual, flash.set_start(0)], size=(VIDEO_WIDTH,VIDEO_HEIGHT))
++                     sfx = get_sfx('shimmer') or get_sfx('dramatic_reveal')
++                     if sfx: audioclip = CompositeAudioClip([audioclip, sfx.set_start(0).volumex(0.18)])
+                      effect_applied = True
++                
++                elif effect_type == "speed_ramp":
++                    try:
++                        mid = duration / 2
++                        first_half = full_visual.subclip(0, mid).fx(vfx.speedx, 1.15)
++                        second_half = full_visual.subclip(mid).fx(vfx.speedx, 0.8)
++                        full_visual = concatenate_videoclips([first_half, second_half])
++                        if full_visual.duration < duration:
++                            full_visual = full_visual.loop(duration=duration)
++                        full_visual = full_visual.subclip(0, duration)
++                        # Swoosh on speed change
++                        sfx = get_sfx('swoosh')
++                        if sfx: audioclip = CompositeAudioClip([audioclip, sfx.set_start(mid*0.85).volumex(0.15)])
++                        effect_applied = True
++                    except:
++                        pass
++                
++                # --- NEW EFFECTS V4 ---
++                elif effect_type == "color_shift":
++                    # Tint the scene briefly (cinematic color wash)
++                    try:
++                        tint_dur = min(0.5, duration * 0.15)
++                        tinted = full_visual.subclip(0, tint_dur).fx(vfx.colorx, 0.7)  # Darken briefly
++                        rest = full_visual.subclip(tint_dur)
++                        full_visual = concatenate_videoclips([tinted, rest])
++                        sfx = get_sfx('mystery_tone') or get_sfx('suspense_build')
++                        if sfx: audioclip = CompositeAudioClip([audioclip, sfx.set_start(0).volumex(0.18)])
++                        effect_applied = True
++                    except:
++                        pass
++                
++                elif effect_type == "whip_pan":
++                    # Quick horizontal blur/slide effect  
++                    try:
++                        blur_dur = 0.15
++                        # Create motion blur by offsetting frames
++                        blur_clip = full_visual.subclip(0, blur_dur).resize(lambda t: 1 + 2*t/blur_dur if t < blur_dur/2 else 3 - 2*t/blur_dur)
++                        rest = full_visual.subclip(blur_dur)
++                        full_visual = concatenate_videoclips([blur_clip, rest])
++                        sfx = get_sfx('swoosh')
++                        if sfx: audioclip = CompositeAudioClip([audioclip, sfx.set_start(0).volumex(0.22)])
++                        effect_applied = True
++                    except:
++                        pass
++                        
++                elif effect_type == "vignette_pulse":
++                    # Dark edges pulse in and out
++                    try:
++                        vignette_dur = min(0.4, duration * 0.1)
++                        dark_frame = full_visual.subclip(0, vignette_dur).fx(vfx.colorx, 0.5)
++                        rest = full_visual.subclip(vignette_dur)
++                        full_visual = concatenate_videoclips([dark_frame, rest])
++                        sfx = get_sfx('bass_drop') or get_sfx('horror_impact') or get_sfx('boom')
++                        if sfx: audioclip = CompositeAudioClip([audioclip, sfx.set_start(0).volumex(0.22)])
++                        effect_applied = True
++                    except:
++                        pass
++                        
++                elif effect_type == "zoom_snap":
++                    # Quick zoom-in snap at beginning of scene
++                    try:
++                        snap_dur = 0.25
++                        def zoom_snap_fn(t):
++                            if t < snap_dur:
++                                progress = t / snap_dur
++                                return 1.3 - 0.3 * progress  # Zoom from 1.3x to 1.0x
++                            return 1.0
++                        full_visual = full_visual.resize(zoom_snap_fn)
++                        sfx = get_sfx('epic_hit') or get_sfx('boom') or get_sfx('bass_drop')
++                        if sfx: audioclip = CompositeAudioClip([audioclip, sfx.set_start(0).volumex(0.22)])
++                        effect_applied = True
++                    except:
++                        pass
+             
+             # --- SUBTITLES & TITLE ---
+             scene_overlays = []
+             
+-            # Use 'Title Box' style for the first scene (Hook/Intro)
++            # Use 'Title Box' style for the first scene (Hook/Intro) again
+             is_intro_scene = (idx == 0)
+             
+             # Generate Subtitles
+@@ -1134,10 +1220,10 @@ def assemble_video(scenes, music_dir, output_file, title_text=None, mood="myster
+                 timings, 
+                 duration, 
+                 0, 
+-                width=1080, 
+-                height=1920, 
+-                raw_text=text,
+-                is_header=is_intro_scene # Highlight if Intro
++                width=VIDEO_WIDTH, 
++                height=VIDEO_HEIGHT, 
++                raw_text=text.replace('*', ''), # Extra sanitization just in case
++                is_header=is_intro_scene # Return to original logic
+             )
+             if not word_clips and text:
+                  print(f"      ÔÜá´©Å Warning: No karaoke clips generated for text: {text[:20]}...")
+@@ -1145,10 +1231,102 @@ def assemble_video(scenes, music_dir, output_file, title_text=None, mood="myster
+             scene_overlays.extend(word_clips)
+             
+             # Composite Scene
+-            scene_comp = CompositeVideoClip([full_visual] + scene_overlays, size=(1080, 1920))
++            scene_comp = CompositeVideoClip([full_visual.set_position("center")] + scene_overlays, size=(VIDEO_WIDTH, VIDEO_HEIGHT))
++            
++            # --- INTER-SCENE TRANSITIONS (Visual Overlay Only) ---
++            # Add flash transition at the start of new scenes (60% chance)
++            # This overlays the flash without adding extra time/silence to the chronological timeline
++            if idx > 0 and random.random() < 0.6:
++                flash_t = create_flash_transition()
++                flash_t = flash_t.subclip(0, min(0.2, flash_t.duration))
++                scene_comp = CompositeVideoClip([scene_comp, flash_t.set_start(0)], size=(VIDEO_WIDTH, VIDEO_HEIGHT))
++            
++            # --- CONTEXTUAL MOOD-BASED SFX ---
++            # Analyzes scene text keywords + mood to add appropriate SFX
++            text_lower = text.lower()
++            
++            # Define keyword groups for mood detection
++            horror_words = ['muerte', 'muerto', 'terror', 'horror', 'sangre', 'cad├íver', 'maldici├│n', 
++                           'oscuro', 'oscuridad', 'demonio', 'fantasma', 'pesadilla', 'asesin', 'mataron',
++                           'dead', 'death', 'horror', 'blood', 'curse', 'dark', 'demon', 'ghost', 'nightmare',
++                           'killed', 'murder', 'terrif', 'creepy', 'haunted', 'evil', 'sinister']
++            mystery_words = ['secreto', 'oculto', 'misterio', 'enigma', 'desconocido', 'nadie sabe',
++                            'inexplicable', 'conspiraci├│n', 'verdad', 'escondido', 'perdido', 'olvidado',
++                            'secret', 'hidden', 'mystery', 'enigma', 'unknown', 'nobody knows',
++                            'inexplicable', 'conspiracy', 'truth', 'lost', 'forgotten', 'disappear']
++            epic_words = ['batalla', 'guerra', 'imperio', 'conquistar', 'poder', 'legendario', '├®pico',
++                         'invencible', 'destruir', 'victoria', 'ej├®rcito', 'revoluci├│n', 'h├®roe',
++                         'battle', 'war', 'empire', 'conquer', 'power', 'legendary', 'epic',
++                         'invincible', 'destroy', 'victory', 'army', 'revolution', 'hero', 'warrior']
++            science_words = ['descubrimiento', 'ciencia', 'tecnolog├¡a', 'cerebro', 'mente', 'universo',
++                            'cu├íntico', 'experimento', 'cient├¡fico', 'laboratorio', '├ítomo', 'genio',
++                            'discovery', 'science', 'technology', 'brain', 'mind', 'universe',
++                            'quantum', 'experiment', 'scientist', 'laboratory', 'atom', 'genius']
++            sad_words = ['triste', 'llorar', 'dolor', 'sufrir', 'tragedia', 'p├®rdida', 'soledad',
++                        'abandonado', 'desesperaci├│n', 'lamento', 'v├¡ctima',
++                        'sad', 'cry', 'pain', 'suffer', 'tragedy', 'loss', 'loneliness', 'desperate']
++            dramatic_words = ['incre├¡ble', 'imposible', 'impactante', 'revelaci├│n', 'sorprendente',
++                             'shocking', 'mind-blowing', 'incredible', 'impossible', 'unbelievable',
++                             'revolucion├│', 'cambi├│ para siempre', 'nunca antes', 'jam├ís', 'asombroso']
++            comedy_words = ['gracioso', 'risa', 'broma', 'rid├¡culo', 'absurdo', 'tonto', 'divertido',
++                           'chiste', 'locura', 'funny', 'laugh', 'joke', 'ridiculous', 'absurd', 'silly']
++            surprise_words = ['wow', 'dios m├¡o', 'inesperado', 'wow', 'omg', 'unexpected']
++            
++            # Check which mood matches this scene's text
++            scene_sfx = None
++            sfx_vol = 0.12
++            
++            if any(w in text_lower for w in comedy_words) or mood == 'happy':
++                scene_sfx = get_sfx('comedy_boing') or get_sfx('comedy_slide') or get_sfx('comedy_honk') or get_sfx('record_scratch')
++                sfx_vol = 0.20
++                if scene_sfx and random.random() < 0.5:
++                    # Quick funny visual effect: bounce
++                    scene_comp = scene_comp.resize(lambda t: 1.0 + np.sin(t*10)*0.05 if t < 0.5 else 1.0)
++            elif any(w in text_lower for w in surprise_words):
++                scene_sfx = get_sfx('surprise_sting') or get_sfx('wow_riser')
++                sfx_vol = 0.25
++                if scene_sfx and random.random() < 0.5:
++                    # Sudden zoom
++                    scene_comp = scene_comp.resize(lambda t: 1.1 if t < 0.2 else 1.0)
++            elif any(w in text_lower for w in horror_words) or mood == 'dark':
++                scene_sfx = get_sfx('horror_stinger') or get_sfx('horror_impact') or get_sfx('horror_whisper')
++                sfx_vol = 0.18
++            elif any(w in text_lower for w in epic_words):
++                scene_sfx = get_sfx('epic_hit') or get_sfx('dramatic_reveal')
++                sfx_vol = 0.16
++            elif any(w in text_lower for w in mystery_words) or mood == 'mystery':
++                scene_sfx = get_sfx('mystery_tone') or get_sfx('suspense_build')
++                sfx_vol = 0.15
++            elif any(w in text_lower for w in science_words) or mood == 'curiosity':
++                scene_sfx = get_sfx('digital_blip') or get_sfx('sci_fi_scan')
++                sfx_vol = 0.12
++            elif any(w in text_lower for w in sad_words) or mood == 'sad':
++                scene_sfx = get_sfx('sad_tone')
++                sfx_vol = 0.15
++            elif any(w in text_lower for w in dramatic_words):
++                scene_sfx = get_sfx('dramatic_reveal') or get_sfx('epic_hit')
++                sfx_vol = 0.18
++            
++            # Apply contextual SFX at a random position in the scene (not always at start)
++            if scene_sfx:
++                sfx_start = random.uniform(0.1, max(0.2, duration * 0.3))
++                audioclip = CompositeAudioClip([audioclip, scene_sfx.set_start(sfx_start).volumex(sfx_vol)])
++                print(f"      ­ƒÄÁ Contextual SFX applied at {sfx_start:.1f}s (mood-matched)")
++            
++            # Add suspense build before the last 2 scenes for tension
++            if idx == len(scenes) - 2:
++                tension_sfx = get_sfx('suspense_build') or get_sfx('tension_riser')
++                if tension_sfx:
++                    # Place near end of scene to build into climax
++                    t_start = max(0, duration - tension_sfx.duration - 0.2)
++                    audioclip = CompositeAudioClip([audioclip, tension_sfx.set_start(t_start).volumex(0.10)])
++                    print(f"      ­ƒÄÁ Tension build SFX at {t_start:.1f}s (pre-climax)")
+             
+-            # --- SCENE SFX (Fallback) ---
+-            # Removed random scene SFX (pops/impacts) as per user request to improve quality
++            # Thunder SFX for dramatic moments (20% chance if text is dark/heavy)
++            if any(w in text_lower for w in ['destruir', 'destroy', 'caer', 'ca├¡da', 'colapso', 'fin', 'apocal']):
++                thunder = get_sfx('thunder')
++                if thunder and random.random() < 0.5:
++                    audioclip = CompositeAudioClip([audioclip, thunder.set_start(0.5).volumex(0.08)])
+             
+             scene_comp = scene_comp.set_audio(audioclip)
+             final_clips.append(scene_comp)
+@@ -1157,56 +1335,70 @@ def assemble_video(scenes, music_dir, output_file, title_text=None, mood="myster
+             # Explicitly clear large objects if possible
+             del full_visual
+             del scene_overlays
++            try:
++                 del scene_comp
++            except:
++                 pass
+             import gc
+-            if idx % 2 == 0: gc.collect() # Collect every 2 scenes
++            gc.collect() # OPTIMIZATION: Collect garbage ON EVERY ITERATION to prevent RAM out-of-memory crashes
+             
+         if not final_clips: return False
+ 
+         # --- FINAL ASSEMBLY & TRANSITIONS ---
+-        final_video = concatenate_videoclips(final_clips, method="compose", padding=-0.2)
++        # We must use "chain" so audio doesn't overlap and cut off early.
++        # DO NOT add transition clips chronologically here, it inserts silent pauses and ruins sync!
++        final_video = concatenate_videoclips(final_clips, method="chain")
+         
+         # Audio Mixing
+         main_audio = final_video.audio
+         audio_layers = [main_audio]
+ 
+-        # 1. Whooshes - STRIPPED due to user request (loud/annoying)
+-        # whoosh = get_sfx('whoosh')
+-        # if whoosh:
+-        #     curr_t = 0
+-        #     for i in range(len(final_clips)-1):
+-        #         curr_t += final_clips[i].duration - 0.2
+-        #         if random.random() < style_mgr.get_transition_prob():
+-        #              audio_layers.append(whoosh.set_start(max(0, curr_t - 0.3)))
+-        
+-        # 2. Riser - STRIPPED due to user request
+-        # riser = get_sfx('riser')
+-        # if riser:
+-        #     start_t = final_video.duration - 2.5
+-        #     if start_t > 0:
+-        #         audio_layers.append(riser.set_start(start_t))
+-
+-        # 3. Soft Transitions (Pop/Click instead of Whoosh)
+-        # Add subtle pops at cuts?
++        # --- LAYER 1: Subtle Swooshes at Scene Transitions ---
++        swoosh_sfx = get_sfx('swoosh')
++        if swoosh_sfx:
++             curr_t = 0
++             for i in range(len(final_clips)-1):
++                 curr_t += final_clips[i].duration - 0.15
++                 # 70% chance at each cut point for better pacing
++                 if random.random() < 0.7: 
++                      audio_layers.append(swoosh_sfx.set_start(max(0, curr_t)).volumex(0.15))
++
++        # --- LAYER 2: Soft Pops/Clicks at remaining cuts ---
+         pop_sfx = get_sfx('pop')
+-        if pop_sfx:
++        click_sfx = get_sfx('click')
++        if pop_sfx or click_sfx:
+              curr_t = 0
+              for i in range(len(final_clips)-1):
+                  curr_t += final_clips[i].duration - 0.2
+-                 # Lower prob, very subtle
+-                 if random.random() < 0.3: 
+-                      audio_layers.append(pop_sfx.set_start(max(0, curr_t)).volumex(0.1))
++                 if random.random() < 0.4:
++                      sfx_choice = random.choice([s for s in [pop_sfx, click_sfx] if s])
++                      audio_layers.append(sfx_choice.set_start(max(0, curr_t)).volumex(0.12))
++
++        # --- LAYER 3: Shimmer on Title (First 2 seconds) ---
++        shimmer = get_sfx('shimmer')
++        if shimmer:
++            audio_layers.append(shimmer.set_start(0.3).volumex(0.06))
++
++        # --- LAYER 4: Tension Riser Before Climax (last scene) ---
++        if len(final_clips) >= 2:
++            # Place a subtle reverse cymbal or riser before the last scene
++            rev_cymbal = get_sfx('reverse_cymbal')
++            if not rev_cymbal:
++                rev_cymbal = get_sfx('tension_riser')
++            if rev_cymbal:
++                # Start it ~2s before the last scene begins
++                last_scene_start = sum(c.duration for c in final_clips[:-1]) - 1.5
++                if last_scene_start > 1:
++                    audio_layers.append(rev_cymbal.set_start(max(0, last_scene_start)).volumex(0.07))
+ 
+-        # 3. Music
++        # --- LAYER 5: Background Music (Mood-based) ---
+         if os.path.isdir(music_dir):
+             all_files = [f for f in os.listdir(music_dir) if f.endswith('.mp3')]
+             
+             # Smart Music Selection
+             allowed_files = MUSIC_MOODS.get(mood, [])
+-            
+-            # Filter available files that match the mood
+             valid_choices = [f for f in all_files if f in allowed_files]
+             
+-            # Fallback: if no specific mood files found, use any
+             if not valid_choices:
+                 print(f"ÔÜá´©Å No music found for mood '{mood}'. Using random.")
+                 valid_choices = all_files
+@@ -1221,6 +1413,17 @@ def assemble_video(scenes, music_dir, output_file, title_text=None, mood="myster
+                 else:
+                     music = music.subclip(0, final_video.duration)
+                 audio_layers.append(music.volumex(0.12))
++                
++        # --- LAYER 6: Ambient Texture (Drone/Wind/Space) ---
++        ambient_keys = [k for k in sfx_lib.keys() if 'ambient' in k or 'drone' in k or 'wind' in k or 'space' in k]
++        if ambient_keys:
++            amb_sfx = sfx_lib[random.choice(ambient_keys)]
++            if amb_sfx.duration < final_video.duration:
++                 amb_sfx = audio_loop(amb_sfx, duration=final_video.duration)
++            else:
++                 amb_sfx = amb_sfx.subclip(0, final_video.duration)
++            audio_layers.append(amb_sfx.volumex(0.06)) # Very quiet background texture
++            print(f"­ƒîè Ambient layer added.")
+         
+         final_video = final_video.set_audio(CompositeAudioClip(audio_layers))
+         
+@@ -1245,38 +1448,28 @@ def assemble_video(scenes, music_dir, output_file, title_text=None, mood="myster
+             
+             final_video = concatenate_videoclips([intro_part, rest_part])
+             
+-            # Audiovisual: Nice Whoosh + Impact -> REPLACED with Soft Pop/Glitch
+-            # sfx_whoosh = get_sfx('whoosh')
+-            # if sfx_whoosh: audio_layers.append(sfx_whoosh.set_start(0).volumex(0.25))
+-            
+-            # sfx_impact = get_sfx('impact') 
+-            # if sfx_impact: audio_layers.append(sfx_impact.set_start(0.1).volumex(0.15))
+-            
+-            sfx_soft = get_sfx('pop')
+-            if sfx_soft: audio_layers.append(sfx_soft.set_start(0).volumex(0.15))
++            # Cinematic intro SFX: Deep Boom + subtle swoosh
++            sfx_boom = get_sfx('boom')
++            if sfx_boom: audio_layers.append(sfx_boom.set_start(0).volumex(0.12))
++            sfx_soft = get_sfx('swoosh')
++            if sfx_soft: audio_layers.append(sfx_soft.set_start(0.1).volumex(0.08))
+ 
+         elif style_mgr.intro_effect == "flash_in":
+             flash = create_flash_transition()
+-            final_video = CompositeVideoClip([final_video, flash.set_start(0)], size=(1080,1920))
+-            # Pleasant whoosh -> Soft Pop
+-            sfx_intro = get_sfx('pop')
+-            if sfx_intro: audio_layers.append(sfx_intro.set_start(0).volumex(0.15))
++            final_video = CompositeVideoClip([final_video, flash.set_start(0)], size=(VIDEO_WIDTH,VIDEO_HEIGHT))
++            # Bass drop on flash intro
++            sfx_intro = get_sfx('bass_drop')
++            if not sfx_intro: sfx_intro = get_sfx('boom')
++            if sfx_intro: audio_layers.append(sfx_intro.set_start(0).volumex(0.10))
+             
+         elif style_mgr.intro_effect == "glitch_start":
+             # Apply glitch to first 0.5s
+             intro_clip = final_video.subclip(0, 0.6)
+             intro_glitch = vfx_glitch_clip(intro_clip, duration=0.6)
+-            final_video = CompositeVideoClip([final_video, intro_glitch.set_start(0)], size=(1080,1920))
++            final_video = CompositeVideoClip([final_video, intro_glitch.set_start(0)], size=(VIDEO_WIDTH,VIDEO_HEIGHT))
+             # Quiet glitch
+             sfx_intro = get_sfx('glitch')
+             if sfx_intro: audio_layers.append(sfx_intro.set_start(0).volumex(0.15))
+-            
+-        elif style_mgr.intro_effect == "slide_in":
+-             # Moving final_video is okay.
+-             final_video = final_video.set_position(lambda t: (int(-1080 + 1080*(t/0.5)), "center") if t < 0.5 else "center")
+-             # Whoosh -> Soft Pop
+-             sfx_intro = get_sfx('pop')
+-             if sfx_intro: audio_layers.append(sfx_intro.set_start(0).volumex(0.15))
+ 
+         # Re-set audio after Intro SFX additions
+         if len(audio_layers) > 1:
+@@ -1299,7 +1492,7 @@ def assemble_video(scenes, music_dir, output_file, title_text=None, mood="myster
+                 end_part = final_video.subclip(start_glitch)
+                 end_glitch = vfx_glitch_clip(end_part, duration=0.6)
+                 # Overlay
+-                final_video = CompositeVideoClip([final_video, end_glitch.set_start(start_glitch)], size=(1080,1920))
++                final_video = CompositeVideoClip([final_video, end_glitch.set_start(start_glitch)], size=(VIDEO_WIDTH,VIDEO_HEIGHT))
+                 # Quiet glitch out
+                 sfx_outro = get_sfx('glitch')
+                 if sfx_outro: 
+@@ -1319,29 +1512,42 @@ def assemble_video(scenes, music_dir, output_file, title_text=None, mood="myster
+         try:
+              # Use TextClip if ImageMagick is configured, OR use PIL ImageClip
+              # Using PIL ImageClip for safety (no dependency on ImageMagick binary)
+-             wm_w, wm_h = 400, 100
+-             wm_img = Image.new('RGBA', (wm_w, wm_h), (0,0,0,0))
+-             wm_draw = ImageDraw.Draw(wm_img)
+-             
+              # Load small font
+              try:
+-                 wm_font = ImageFont.truetype(FONT_PATH, 40)
++                 wm_font = ImageFont.truetype(FONT_PATH, 28)
+              except:
+                  wm_font = ImageFont.load_default()
+                  
+              # Text with shadow
+-             wm_text = CHANNEL_NAME
++             wm_text = watermark_text if watermark_text else "@RapidFacts"
++             
++             # Calculate dynamic size based on text
++             dummy_img = Image.new('RGBA', (1, 1))
++             dummy_draw = ImageDraw.Draw(dummy_img)
++             bbox = dummy_draw.textbbox((0, 0), wm_text, font=wm_font)
++             wm_w = max(400, bbox[2] - bbox[0] + 50)
++             wm_h = max(100, bbox[3] - bbox[1] + 50)
++             
++             wm_img = Image.new('RGBA', (wm_w, wm_h), (0,0,0,0))
++             wm_draw = ImageDraw.Draw(wm_img)
+              # Shadow
+              wm_draw.text((22, 22), wm_text, font=wm_font, fill=(0,0,0,128))
+              # Main
+              wm_draw.text((20, 20), wm_text, font=wm_font, fill=(255,255,255,128)) # 50% opacity
+              
+-             wm_clip = ImageClip(np.array(wm_img)).set_duration(final_video.duration)
++             wm_array = np.array(wm_img)
++             wm_clip = ImageClip(wm_array)
++             
++             # Extract alpha channel to use as mask
++             mask_array = wm_array[:,:,3] / 255.0
++             wm_mask = ImageClip(mask_array, ismask=True)
++             
++             wm_clip = wm_clip.set_mask(wm_mask).set_duration(final_video.duration)
+              # Position: Bottom Center, slightly up
+-             wm_clip = wm_clip.set_position(("center", 1800))
++             wm_clip = wm_clip.set_position(("center", VIDEO_HEIGHT - 100))
+              
+-             final_video = CompositeVideoClip([final_video, wm_clip], size=(1080,1920))
+-             print(f"      ­ƒÆº Watermark applied: {CHANNEL_NAME}")
++             final_video = CompositeVideoClip([final_video, wm_clip], size=(VIDEO_WIDTH,VIDEO_HEIGHT))
++             print(f"      ­ƒÆº Watermark applied: {wm_text}")
+              
+         except Exception as e_wm:
+              print(f"      ÔÜá´©Å Watermark error: {e_wm}")
+@@ -1349,15 +1555,51 @@ def assemble_video(scenes, music_dir, output_file, title_text=None, mood="myster
+         # Removed Global Title Overlay loop to prevent overlapping/mess ("horrible")
+         # Title is now handled sequentially in the first scene loop.
+ 
+-        # OPTIMIZED WRITE: PRESET FASTER, THREADS 4
++        from proglog import ProgressBarLogger
++        class CancelableLogger(ProgressBarLogger):
++            def __init__(self, is_cancelled_func, prog_cb):
++                super().__init__(init_state=None, bars=None, ignored_bars=None, logged_bars='all', min_time_interval=0, ignore_bars_under=0)
++                self.is_cancelled = is_cancelled_func
++                self.prog_cb = prog_cb
++                
++            def callback(self, **kwargs):
++                if self.is_cancelled and self.is_cancelled():
++                    # We raise a standard Exception that MoviePy won't catch easily
++                    raise KeyboardInterrupt("Render Cancelled by User")
++
++            def bars_callback(self, bar, attr, value, old_value):
++                # Move bar progress
++                if bar == 'chunk' or bar == 't':
++                    if attr == 'index' and self.prog_cb:
++                        total = self.bars[bar].get('total', 1)
++                        if total and total > 0:
++                            # Map MoviePy (0.0 - 1.0) phase to the remaining app (0.45 - 1.0) phase
++                            pct = 0.45 + 0.55 * (value / total) 
++                            msg = f"Encoding frames and audio... {int((value/total)*100)}%"
++                            self.prog_cb(pct, status_text="Generating Final Video...", sub_text=msg)
++                            
++            def set_state(self, **kwargs):
++                self.callback(**kwargs)
++            
++            # Override print message to suppress console logs
++            def print_message(self, message):
++                pass
++            
++            def set_message(self, message):
++                pass
++
++        custom_logger = CancelableLogger(is_cancelled, progress_callback)
++
++        # OPTIMIZED WRITE: FAST PRESET, 4 THREADS, 5000k BITRATE (plenty for 720p)
+         final_video.write_videofile(
+             output_file, 
+             fps=30, 
+             codec='libx264', 
+             audio_codec='aac', 
+-            bitrate="8000k", 
+-            preset='veryfast',   # Balanced speed/stability
+-            threads=1          # SAFE MODE: Reduce threads to prevent OOM on GitHub Runners
++            bitrate="5000k", 
++            preset='fast',        # OPTIMIZATION: Great speed/quality trade-off
++            threads=4,            # OPTIMIZATION: 4 threads for faster encoding
++            logger=custom_logger
+         )
+         # Cleanup Resources
+         try:
+@@ -1373,6 +1615,21 @@ def assemble_video(scenes, music_dir, output_file, title_text=None, mood="myster
+             
+         return True
+ 
++    except KeyboardInterrupt:
++        print("­ƒøæ Video Assembly Cancelled.")
++        # Cleanup Resources
++        try:
++            if 'final_video' in locals(): final_video.close()
++            for c in final_clips:
++                try: c.close()
++                except: pass
++            for s in sfx_lib.values():
++                try: s.close()
++                except: pass
++        except:
++            pass
++        return False
++        
+     except Exception as e:
+         print(f"Error assembling video: {e}")
+         import traceback

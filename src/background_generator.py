@@ -116,7 +116,8 @@ def generate_scene_clip(concept, color, duration, output_path):
     """
     Generates a clip for a specific scene configuration.
     """
-    w, h = 1080, 1920
+    from src.video_editor import VIDEO_WIDTH, VIDEO_HEIGHT
+    w, h = VIDEO_WIDTH, VIDEO_HEIGHT
     try:
         def make_frame(t):
             return make_frame_semantic(t, w, h, concept, color)

@@ -2,8 +2,11 @@ import json
 import os
 import difflib
 
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+DEFAULT_HISTORY_FILE = os.path.join(BASE_DIR, "video_history.json")
+
 class HistoryManager:
-    def __init__(self, history_file="video_history.json"):
+    def __init__(self, history_file=DEFAULT_HISTORY_FILE):
         self.history_file = history_file
         self.data = self._load_history()
 

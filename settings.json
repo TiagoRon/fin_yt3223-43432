@@ -1,0 +1,10 @@
+{
+    "api_keys": {
+        "google_gemini": "",
+        "pexels": ""
+    },
+    "preferences": {
+        "language": "en",
+        "watermark": "@AIShortsGenerator"
+    }
+}

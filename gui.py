@@ -41,22 +41,38 @@ class App:
         # Mode Selection (Radio)
         tk.Label(frame_controls, text="Modo:", font=("Arial", 12), bg="#1e1e1e", fg="white").pack(side=tk.LEFT, padx=10)
         
-        self.var_mode = tk.StringVar(value="curiosity")
+        self.var_mode = tk.StringVar(value="custom")
         
-        rb_curiosity = tk.Radiobutton(frame_controls, text="Curiosidad", variable=self.var_mode, value="curiosity", 
-                                      font=("Arial", 10), bg="#1e1e1e", fg="orange", selectcolor="#1e1e1e", activebackground="#1e1e1e", activeforeground="orange")
-        rb_curiosity.pack(side=tk.LEFT, padx=2)
-        
-        rb_whatif = tk.Radiobutton(frame_controls, text="What If", variable=self.var_mode, value="what_if", 
-                                   font=("Arial", 10), bg="#1e1e1e", fg="cyan", selectcolor="#1e1e1e", activebackground="#1e1e1e", activeforeground="cyan")
-        rb_whatif.pack(side=tk.LEFT, padx=2)
+        # Create a subframe for radios to flow better
+        radio_frame = tk.Frame(frame_controls, bg="#1e1e1e")
+        radio_frame.pack(side=tk.LEFT, padx=5)
 
-        rb_top3 = tk.Radiobutton(frame_controls, text="Top 3", variable=self.var_mode, value="top_3", 
-                                 font=("Arial", 10), bg="#1e1e1e", fg="#ADFF2F", selectcolor="#1e1e1e", activebackground="#1e1e1e", activeforeground="#ADFF2F")
-        rb_top3.pack(side=tk.LEFT, padx=2)
+        rb_custom = tk.Radiobutton(radio_frame, text="Custom", variable=self.var_mode, value="custom", 
+                                      font=("Arial", 9), bg="#1e1e1e", fg="#ff00ff", selectcolor="#1e1e1e", activebackground="#1e1e1e", activeforeground="#ff00ff")
+        rb_custom.pack(side=tk.LEFT)
+
+        rb_curiosity = tk.Radiobutton(radio_frame, text="Curiosidad", variable=self.var_mode, value="curiosity", 
+                                      font=("Arial", 9), bg="#1e1e1e", fg="orange", selectcolor="#1e1e1e", activebackground="#1e1e1e", activeforeground="orange")
+        rb_curiosity.pack(side=tk.LEFT)
+        
+        rb_whatif = tk.Radiobutton(radio_frame, text="What If", variable=self.var_mode, value="what_if", 
+                                   font=("Arial", 9), bg="#1e1e1e", fg="cyan", selectcolor="#1e1e1e", activebackground="#1e1e1e", activeforeground="cyan")
+        rb_whatif.pack(side=tk.LEFT)
+
+        rb_top3 = tk.Radiobutton(radio_frame, text="Top 3", variable=self.var_mode, value="top_3", 
+                                 font=("Arial", 9), bg="#1e1e1e", fg="#ADFF2F", selectcolor="#1e1e1e", activebackground="#1e1e1e", activeforeground="#ADFF2F")
+        rb_top3.pack(side=tk.LEFT)
+
+        rb_dark = tk.Radiobutton(radio_frame, text="Dark Facts", variable=self.var_mode, value="dark_facts", 
+                                 font=("Arial", 9), bg="#1e1e1e", fg="red", selectcolor="#1e1e1e", activebackground="#1e1e1e", activeforeground="red")
+        rb_dark.pack(side=tk.LEFT)
+
+        rb_hist = tk.Radiobutton(radio_frame, text="History", variable=self.var_mode, value="history", 
+                                 font=("Arial", 9), bg="#1e1e1e", fg="yellow", selectcolor="#1e1e1e", activebackground="#1e1e1e", activeforeground="yellow")
+        rb_hist.pack(side=tk.LEFT)
 
         self.btn_run = tk.Button(frame_controls, text="GENERAR ▶", font=("Arial", 12, "bold"), bg="#00bcff", fg="white", cursor="hand2", command=self.start_generation)
-        self.btn_run.pack(side=tk.LEFT, padx=20)
+        self.btn_run.pack(side=tk.LEFT, padx=15)
 
         # Log Area
         self.log_area = scrolledtext.ScrolledText(root, width=70, height=20, font=("Consolas", 10), bg="#2d2d2d", fg="#d4d4d4", wrap=tk.WORD)

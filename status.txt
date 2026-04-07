@@ -1,0 +1,27 @@
+﻿On branch main
+Your branch is up to date with 'origin/main'.
+
+Changes not staged for commit:
+  (use "git add <file>..." to update what will be committed)
+  (use "git restore <file>..." to discard changes in working directory)
+	modified:   main.py
+	modified:   src/video_editor.py
+
+Untracked files:
+  (use "git add <file>..." to include in what will be committed)
+	Script_YT_Videos/
+	asd.py
+	chrome_profile/
+	diff.txt
+	gui_flet.py
+	settings.json
+	src/config_manager.py
+	src/history_helpers.py
+	src/license_manager.py
+	src/localization.py
+	src/upload_manager.py
+	src/upload_utils.py
+	src/uploader.py
+	status.txt
+
+no changes added to commit (use "git add" and/or "git commit -a")
