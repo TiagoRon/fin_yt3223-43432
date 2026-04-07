@@ -66,12 +66,22 @@ jobs:
         YOUTUBE_COOKIES: ${{ secrets.YOUTUBE_COOKIES }}
       run: |
         if [ -n "$YOUTUBE_COOKIES" ]; then
-          echo "# Netscape HTTP Cookie File" > cookies.txt
-          echo "# https://curl.haxx.se/rfc/cookie_spec.html" >> cookies.txt
-          echo "# This is a generated file! Do not edit." >> cookies.txt
-          echo "" >> cookies.txt
-          echo "$YOUTUBE_COOKIES" | grep -v "Netscape" | grep -v "^#" | grep -v "esto" >> cookies.txt
-          echo "Cookies saved and verified."
+          cat << 'EOF' > parse_cookies.py
+        import os
+        cookies = os.environ.get('YOUTUBE_COOKIES', '')
+        lines = cookies.replace('\r', '').split('\n')
+        valid_lines = [l for l in lines if l.strip() and not l.startswith('#') and 'esto' not in l]
+        with open('cookies.txt', 'w', encoding='utf-8') as f:
+            f.write('# Netscape HTTP Cookie File\n')
+            f.write('# https://curl.haxx.se/rfc/cookie_spec.html\n')
+            f.write('# This is a generated file! Do not edit.\n\n')
+            for l in valid_lines:
+                f.write(l + '\n')
+        EOF
+          sed -i 's/^        //' parse_cookies.py
+          python parse_cookies.py
+          head -n 5 cookies.txt || true
+          echo "Cookies saved and verified via Python."
         fi
 
     - name: Run Cloud Video Generation
