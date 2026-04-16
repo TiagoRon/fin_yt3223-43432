@@ -21,3 +21,5 @@ openai-whisper
 yt-dlp
 stable-ts
 curl-cffi
+selenium
+webdriver-manager

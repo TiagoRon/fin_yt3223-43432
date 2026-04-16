@@ -2,12 +2,12 @@ name: Daily AutoShorts Generator
 
 on:
   schedule:
-    - cron: '0 13 * * *' # Runs at 13:00 UTC (10:00 AM Argentina/Brazil)
-  workflow_dispatch: # Allows manual trigger from GitHub UI
+    - cron: '0 13 * * *' # 13:00 UTC = 10:00 AM Argentina
+  workflow_dispatch:
 
 jobs:
-  generate_bundle:
-    name: Generate All Videos
+  automate:
+    name: Generate Daily Videos
     runs-on: ubuntu-latest
     
     permissions:
@@ -15,11 +15,10 @@ jobs:
       contents: write
 
     steps:
-    - name: Free Space - Delete Old Runs
+    - name: Free Space
       env:
         GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
-        # Delete last 5 completed runs to free up storage space
         gh run list --status completed --limit 5 --json databaseId -q '.[].databaseId' | xargs -I {} gh run delete {} || echo "No runs to delete"
 
     - name: Checkout code
@@ -30,7 +29,7 @@ jobs:
       with:
         python-version: '3.11'
 
-    - name: Install system dependencies (ImageMagick & FFmpeg)
+    - name: Install system dependencies
       run: |
         sudo apt-get update
         sudo apt-get install -y imagemagick ffmpeg zip
@@ -41,34 +40,15 @@ jobs:
         python -m pip install --upgrade pip
         pip install -r requirements.txt
 
-    - name: Generate 'Top 3' Video
+    - name: Run Daily Generation
       env:
         GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
         PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY }}
-        VIDEO_COUNT: 1
-        VIDEO_STYLE: top_3
-      continue-on-error: true
-      run: python main.py
+        WATERMARK_TEXT: "@AIShortsGenerator"
+        LANGUAGE: "es"
+      run: python daily_generation.py
 
-    - name: Generate 'What If' Video
-      env:
-        GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
-        PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY }}
-        VIDEO_COUNT: 1
-        VIDEO_STYLE: what_if
-      continue-on-error: true
-      run: python main.py
-
-    - name: Generate 'Curiosity' Video
-      env:
-        GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
-        PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY }}
-        VIDEO_COUNT: 1
-        VIDEO_STYLE: curiosity
-      continue-on-error: true
-      run: python main.py
-
-    - name: Commit & Push History (Prevent Duplicates)
+    - name: Commit & Push History
       continue-on-error: true
       run: |
         git config user.name "AutoShorts Bot"
@@ -78,21 +58,19 @@ jobs:
         git commit -m "Update video history [skip ci]" || echo "No changes to commit"
         git push origin main || echo "Failed to push history"
 
-    - name: Debug - List Output
-      if: always()
-      run: ls -R output/ || echo "Output dir not found"
-
     - name: Zip All Videos
       if: always()
       run: |
-        cd output
-        zip -r ../all_daily_videos.zip .
-        cd ..
+        if [ -d "output" ]; then
+          cd output
+          zip -r ../daily_videos.zip .
+          cd ..
+        fi
 
-    - name: Upload Final Bundle
+    - name: Upload Artifacts
       if: always()
       uses: actions/upload-artifact@v4
       with:
-        name: ALL_DAILY_VIDEOS
-        path: all_daily_videos.zip
+        name: DAILY_VIDEOS
+        path: daily_videos.zip
         retention-days: 3
