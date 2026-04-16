@@ -61,10 +61,12 @@ jobs:
     - name: Zip All Videos
       if: always()
       run: |
-        if [ -d "output" ]; then
+        if [ -d "output" ] && [ "$(ls -A output)" ]; then
           cd output
           zip -r ../daily_videos.zip .
           cd ..
+        else
+          echo "No files found in output directory to zip."
         fi
 
     - name: Upload Artifacts
@@ -73,4 +75,5 @@ jobs:
       with:
         name: DAILY_VIDEOS
         path: daily_videos.zip
+        if-no-files-found: warn # Esto evita que el workflow falle si no hay videos
         retention-days: 3
