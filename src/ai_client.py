@@ -218,7 +218,7 @@ def generate_script(topic=None, specific_hook=None, style="curiosity", is_test=F
     for attempt in range(max_retries):
         try:
             response = client.models.generate_content(
-                model='gemini-2.5-flash',
+                model='gemini-2.5-flash-lite',
                 contents=prompt,
                 config=types.GenerateContentConfig(
                     response_mime_type='application/json'
@@ -303,7 +303,7 @@ def generate_viral_hooks(base_topic, trending_list, lang="en"):
     
     try:
         response = client.models.generate_content(
-            model='gemini-2.5-flash',
+            model='gemini-2.5-flash-lite',
             contents=prompt,
             config=types.GenerateContentConfig(
                 response_mime_type='application/json'
@@ -368,7 +368,7 @@ def generate_creative_topic(style="what_if", lang="en"):
         
     try:
         response = client.models.generate_content(
-            model='gemini-2.5-flash',
+            model='gemini-2.5-flash-lite',
             contents=prompt
         )
         return response.text.strip().replace('"', '')
