@@ -1,4 +1,4 @@
-name: Daily AutoShorts Generator
+name: putita
 
 on:
   schedule:
