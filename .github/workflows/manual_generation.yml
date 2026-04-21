@@ -1,4 +1,5 @@
 name: Manual Video Generation
+run-name: "Gen: ${{ inputs.video_style }} - ${{ inputs.video_topic }} (#${{ github.run_number }})"
 
 on:
   workflow_dispatch:
@@ -98,16 +99,21 @@ jobs:
 
     - name: Zip Generated Videos
       if: always()
+      id: zip_step
       run: |
+        # Generar nombre con fecha (ej: videos_2024-04-20_23-15.zip)
+        FILE_NAME="videos_$(date +'%Y-%m-%d_%H-%M').zip"
+        echo "filename=$FILE_NAME" >> $GITHUB_OUTPUT
+        
         mkdir -p output
         cd output
-        zip -r ../generated_videos.zip . || echo "Zip empty or failed"
+        zip -r "../$FILE_NAME" . || echo "Zip empty or failed"
         cd ..
 
     - name: Upload Final Bundle
       if: always()
       uses: actions/upload-artifact@v4
       with:
-        name: GENERATED_VIDEOS_BUNDLE
-        path: generated_videos.zip
+        name: ${{ steps.zip_step.outputs.filename }}
+        path: ${{ steps.zip_step.outputs.filename }}
         retention-days: 5
