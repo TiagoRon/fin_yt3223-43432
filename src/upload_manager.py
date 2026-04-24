@@ -3,7 +3,7 @@ import threading
 import time
 from datetime import datetime, date, timedelta
 from src.uploader import get_driver, upload_video_selenium, open_browser_for_login, check_login_status, logout_user
-from src.upload_utils import extract_rar, parse_metadata
+from src.upload_utils import extract_archive, parse_metadata
 
 class UploadManager:
     def __init__(self, log_callback=print, progress_callback=None, loc=None):
@@ -68,15 +68,25 @@ class UploadManager:
             self.log("No videos provided for upload.")
             return
 
-        try:
-            self.log("Initializing Browser for Upload...")
-            self.driver = get_driver(headless=True)
-        except Exception as e:
-            self.log(f"Failed to start browser: {e}")
-            return
-
         total = len(items)
         try:
+            self.log("Initializing Browser for Upload...")
+            if self.progress_callback:
+                self.progress_callback(0, total, "", "initializing")
+            self.driver = get_driver(headless=True)
+            time.sleep(5) # Stability delay: wait for browser to fully initialize session
+        except Exception as e:
+            error_msg = str(e)
+            if "session not created" in error_msg.lower() or "user data directory is already in use" in error_msg.lower():
+                error_msg = "PERFIL BLOQUEADO: Cierra todas las ventanas de Chrome y reintenta."
+            
+            self.log(f"Failed to start browser: {error_msg}")
+            if self.progress_callback:
+                self.progress_callback(0, total, error_msg, "error")
+            return
+        try:
+            success_count = 0
+            fail_count = 0
             self.log(f"Starting Upload Process ({total} videos)")
             if self.progress_callback:
                 self.progress_callback(0, total, "", "starting")
@@ -134,7 +144,14 @@ class UploadManager:
                     cancel_check=lambda: self.stop_flag
                 )
 
+                if success == "not_logged_in":
+                    self.log("❌ CRITICAL: No session found. Aborting process.")
+                    if self.progress_callback:
+                        self.progress_callback(i, total, "Debes hacer LOGIN primero", "error")
+                    break
+
                 if success:
+                    success_count += 1
                     self.log(f"✅ [{i+1}/{total}] Upload Successful")
                     if self.progress_callback:
                         self.progress_callback(i + 1, total, vname, "done")
@@ -151,15 +168,17 @@ class UploadManager:
                     except Exception as meta_e:
                         self.log(f"Failed to save upload status: {meta_e}")
                 else:
+                    fail_count += 1
                     self.log(f"❌ [{i+1}/{total}] Upload Failed")
                     if self.progress_callback:
                         self.progress_callback(i + 1, total, vname, "failed")
 
                 time.sleep(1)
 
-            self.log("All tasks completed.")
+            summary_msg = f"Done: {success_count} success, {fail_count} failed."
+            self.log(f"All tasks completed. {summary_msg}")
             if self.progress_callback:
-                self.progress_callback(total, total, "", "completed")
+                self.progress_callback(total, total, summary_msg, "completed")
 
         except Exception as e:
             self.log(f"Process Error: {e}")
@@ -183,6 +202,7 @@ class UploadManager:
         try:
             self.log("Initializing Browser for Upload...")
             self.driver = get_driver(headless=True)
+            time.sleep(5) # Stability delay
         except Exception as e:
             self.log(f"Failed to start browser: {e}")
             return

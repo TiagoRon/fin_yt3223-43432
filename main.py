@@ -38,7 +38,18 @@ def run_batch(count, topic=None, use_trends=False, style="curiosity", log_func=p
     # Init History Manager once
     from src.history_manager import HistoryManager
     hm = HistoryManager()
-    
+
+    def safe_log(msg):
+        try:
+            log_func(msg)
+        except UnicodeEncodeError:
+            try:
+                # Fallback: strip emojis or encode/decode as ascii
+                clean_msg = msg.encode('ascii', 'ignore').decode('ascii')
+                log_func(clean_msg)
+            except: pass
+        except: pass
+
     # Ensure output root exists
     os.makedirs(OUTPUT_DIR, exist_ok=True)
     
@@ -81,7 +92,7 @@ def run_batch(count, topic=None, use_trends=False, style="curiosity", log_func=p
                      available = [t for t in WHAT_IF_TOPICS if not hm.is_topic_used(t) and not hm.is_title_used(t)]
                      current_topic = random.choice(available) if available else random.choice(WHAT_IF_TOPICS)
                      
-            log_func(f"❓ Modo What If: {current_topic}")
+            safe_log(f"❓ Modo What If: {current_topic}")
             
             # Double check
             if hm.is_topic_used(current_topic) or hm.is_title_used(current_topic):
@@ -117,7 +128,7 @@ def run_batch(count, topic=None, use_trends=False, style="curiosity", log_func=p
                      available = [t for t in DARK_FACTS_TOPICS if not hm.is_title_used(t)]
                      current_topic = random.choice(available) if available else random.choice(DARK_FACTS_TOPICS)
             
-            log_func(f"💀 Modo Dark Facts: {current_topic}")
+            safe_log(f"💀 Modo Dark Facts: {current_topic}")
 
         elif style == "history":
             if not current_topic:
@@ -210,9 +221,9 @@ def run_batch(count, topic=None, use_trends=False, style="curiosity", log_func=p
                  hm.add_used_topic(current_topic)
             elif current_topic:
                  hm.add_trend(current_topic)
-            log_func("✅ Agregado a historial (Preventivo) para no repetir.")
+            safe_log("✅ Agregado a historial (Preventivo) para no repetir.")
         except Exception as e:
-            log_func(f"⚠️ Error guardando historial: {e}")
+            safe_log(f"⚠️ Error guardando historial: {e}")
         
         # 2. Process Scenes (New V2.0 Logic)
         log_func(loc.get('log_analyzing_scenes') if loc else "2. Analyzing scenes and generating assets...")
@@ -509,7 +520,7 @@ def run_batch(count, topic=None, use_trends=False, style="curiosity", log_func=p
                 log_func(f"Error limpiando cancelación: {ec}")
             return
             
-        output_file = os.path.join(video_output_dir, "short_final.mp4")
+        output_file = os.path.join(video_output_dir, f"{safe_title}.mp4")
         
         # Calculate Title and Mood EARLY for metadata
         vid_title = script.get('title', '').upper()
@@ -590,7 +601,7 @@ def run_batch(count, topic=None, use_trends=False, style="curiosity", log_func=p
 
             for fname in os.listdir(video_output_dir):
                 # Keep final video and metadata
-                if fname == "short_final.mp4" or fname.endswith(".txt") or fname.endswith(".json"):
+                if (fname.endswith(".mp4") and "scene" not in fname.lower() and "part" not in fname.lower()) or fname.endswith(".txt") or fname.endswith(".json"):
                     continue
                 
                 # Delete everything else

@@ -10,6 +10,8 @@ from src.license_manager import LicenseManager
 from src.localization import LocalizationManager
 from src.upload_manager import UploadManager
 from src.history_helpers import get_video_history
+from src.upload_utils import extract_archive, parse_metadata
+from src.github_sync import GitHubSync
 from main import run_batch
 
 # PREMIUM CONFIGURATION
@@ -1395,8 +1397,46 @@ def main(page: ft.Page):
         def on_login_success():
             login_btn_text.value = state.loc.get("status_google_connected")
             login_btn_text.color = ft.Colors.GREEN
+            # Cambiamos el logo de Google por un Check verde
             login_btn_content.controls[0] = ft.Icon(ft.Icons.CHECK_CIRCLE, color=ft.Colors.GREEN, size=20)
             if page: page.update()
+
+        def show_logout_confirmation_dialog():
+            def confirm_logout(e_dlg):
+                def _do_logout():
+                    if state.uploader.logout():
+                        login_btn_text.value = state.loc.get("btn_login_google")
+                        login_btn_text.color = ft.Colors.WHITE
+                        login_btn_content.controls[0] = ft.Image(src="https://upload.wikimedia.org/wikipedia/commons/5/53/Google_%22G%22_Logo.svg", width=20, height=20)
+                        show_snack(state.loc.get("msg_logged_out"), ft.Colors.ORANGE)
+                    else:
+                        show_snack("Failed to log out", ft.Colors.RED)
+                    
+                    try: page.close(logout_dlg)
+                    except: 
+                        logout_dlg.open = False
+                        page.update()
+                page.run_thread(_do_logout)
+
+            def cancel_logout(e_dlg):
+                try: page.close(logout_dlg)
+                except: 
+                    logout_dlg.open = False
+                    page.update()
+
+            logout_dlg = ft.AlertDialog(
+                title=ft.Text(state.loc.get("title_confirm_logout")),
+                content=ft.Text(state.loc.get("msg_confirm_logout")),
+                actions=[
+                    ft.TextButton(state.loc.get("btn_logout"), on_click=confirm_logout, style=ft.ButtonStyle(color=ft.Colors.RED)),
+                    ft.TextButton(state.loc.get("btn_cancel"), on_click=cancel_logout)
+                ]
+            )
+            try: page.open(logout_dlg)
+            except:
+                page.overlay.append(logout_dlg)
+                logout_dlg.open = True
+                page.update()
 
         # Check login status in background on view load
         def check_initial_login():
@@ -1405,71 +1445,285 @@ def main(page: ft.Page):
         threading.Thread(target=check_initial_login, daemon=True).start()
 
         def on_login(e):
-            # Run login check in background to avoid UI freeze
-            def _login_task():
-                if state.uploader.is_logged_in():
-                    def close_logout_dlg():
-                        try:
-                            page.close(logout_dlg)
-                        except AttributeError:
-                            logout_dlg.open = False
-                            page.update()
-
-                    def confirm_logout(e_dlg):
-                        def _do_logout():
-                            if state.uploader.logout():
-                                login_btn_text.value = state.loc.get("btn_login_google")
-                                login_btn_text.color = ft.Colors.WHITE
-                                login_btn_content.controls[0] = ft.Image(src="https://upload.wikimedia.org/wikipedia/commons/5/53/Google_%22G%22_Logo.svg", width=20, height=20)
-                                show_snack(state.loc.get("msg_logged_out"), ft.Colors.ORANGE)
-                            else:
-                                show_snack("Failed to log out", ft.Colors.RED)
-                            close_logout_dlg()
-                            if page: page.update()
-                        page.run_thread(_do_logout)
-                        
-                    def cancel_logout(e_dlg):
-                        close_logout_dlg()
-
-                    logout_dlg = ft.AlertDialog(
-                        title=ft.Text(state.loc.get("title_confirm_logout", "Confirm Logout")),
-                        content=ft.Text(state.loc.get("msg_confirm_logout")),
-                        actions=[
-                            ft.TextButton(state.loc.get("btn_logout"), on_click=confirm_logout, style=ft.ButtonStyle(color=ft.Colors.RED)),
-                            ft.TextButton(state.loc.get("btn_cancel"), on_click=cancel_logout)
-                        ]
-                    )
-                    
-                    try:
-                        page.open(logout_dlg)
-                    except AttributeError:
-                        page.overlay.append(logout_dlg)
-                        logout_dlg.open = True
-                        page.update()
-                    except Exception as ex:
-                        print(f"Error opening logout dialog: {ex}")
-                    return
-
-                open_dialog = ft.AlertDialog(title=ft.Text(state.loc.get("lbl_info")), content=ft.Text(state.loc.get("msg_login_open")))
-                try:
-                    page.open(open_dialog)
-                except AttributeError:
-                    page.overlay.append(open_dialog)
-                    open_dialog.open = True
-                    page.update()
+            if state.uploader.is_logged_in():
+                show_logout_confirmation_dialog()
+                return
+            
+            # Show "Opening Browser" dialog
+            open_dialog = ft.AlertDialog(title=ft.Text(state.loc.get("lbl_info")), content=ft.Text(state.loc.get("msg_login_open")))
+            try: page.open(open_dialog)
+            except:
+                page.overlay.append(open_dialog)
+                open_dialog.open = True
+                page.update()
                 
-                def success_wrapper():
-                    on_login_success()
-                    show_snack(state.loc.get("msg_login_success"), ft.Colors.GREEN)
-                    
-                state.uploader.open_login_window(on_success=success_wrapper)
-            page.run_thread(_login_task)
+            def success_wrapper():
+                on_login_success()
+                show_snack(state.loc.get("msg_login_success"), ft.Colors.GREEN)
+                
+            state.uploader.open_login_window(on_success=success_wrapper)
             
         def on_select_all(e):
             all_checked = all(cb.value for cb in checkboxes)
             for cb in checkboxes:
                 cb.value = not all_checked
             page.update()
+
+        def on_github_sync(e):
+            def _task():
+                token = state.config.get_api_key("github_token")
+                repo = state.config.get_preference("github_repo", "TiagoRon/fin_yt3223-43432")
+                
+                if not token:
+                    show_snack("GitHub Token missing. Add it in Settings.", ft.Colors.RED)
+                    return
+                
+                try:
+                    if sync_btn.page:
+                        sync_btn.disabled = True
+                        sync_btn.update()
+                except: pass
+                
+                def _run_sync(force=False):
+                    log_message("Starting GitHub Synchronization...")
+                    last_id = state.config.get_preference("last_github_artifact_id", "")
+                    syncer = GitHubSync(token, repo, log_callback=log_message)
+                    result, new_id, folder_path = syncer.sync_latest(os.path.join(BASE_DIR, "output"), last_id=last_id, force=force)
+                    
+                    if result == True:
+                        state.config.set_preference("last_github_artifact_id", str(new_id))
+                        show_snack("GitHub Sync Successful!", ft.Colors.GREEN)
+                        # Refresh the list
+                        change_view(2, force_rebuild=True)
+                    elif result == "already_synced":
+                        def on_confirm_re_download(e_dlg):
+                            try: page.close(dlg)
+                            except: 
+                                dlg.open = False
+                                page.update()
+                            page.run_thread(lambda: _run_sync(force=True))
+                        
+                        def on_cancel_dlg(e_dlg):
+                            try: page.close(dlg)
+                            except: 
+                                dlg.open = False
+                                page.update()
+                        
+                        dlg = ft.AlertDialog(
+                            title=ft.Text("Already Synced"),
+                            content=ft.Text("This artifact was already downloaded. Do you want to download it again?"),
+                            actions=[
+                                ft.TextButton("Yes, download again", on_click=on_confirm_re_download),
+                                ft.TextButton("No", on_click=on_cancel_dlg),
+                            ]
+                        )
+                        try: page.open(dlg)
+                        except:
+                            page.overlay.append(dlg)
+                            dlg.open = True
+                            page.update()
+                        show_snack("You are already up to date!", ft.Colors.BLUE_400)
+                    elif result == "already_old":
+                        show_snack("No new videos for today found.", ft.Colors.ORANGE_400)
+                    else:
+                        show_snack("GitHub Sync Failed. Check logs.", ft.Colors.RED)
+                
+                _run_sync()
+                
+                try:
+                    if sync_btn.page:
+                        sync_btn.disabled = False
+                        sync_btn.update()
+                except: pass
+                
+            page.run_thread(_task)
+
+        def on_mega_sync(e):
+            def _task():
+                from datetime import datetime, date, timedelta
+                token = state.config.get_api_key("github_token")
+                repo = state.config.get_preference("github_repo", "TiagoRon/fin_yt3223-43432")
+                
+                if not token:
+                    show_snack("GitHub Token missing. Add it in Settings.", ft.Colors.RED)
+                    return
+                
+                try:
+                    if mega_sync_btn.page:
+                        mega_sync_btn.disabled = True
+                        mega_sync_btn.update()
+                except: pass
+                
+                def _run_mega(force=False):
+                    log_message("⚡ [MEGA-SYNC] Starting Total Automation...")
+                    last_id = state.config.get_preference("last_github_artifact_id", "")
+                    syncer = GitHubSync(token, repo, log_callback=log_message)
+                    
+                    # 1. Download and Extract
+                    try:
+                        sync_res = syncer.sync_latest(os.path.join(BASE_DIR, "output"), last_id=last_id, force=force)
+                        if isinstance(sync_res, tuple) and len(sync_res) >= 3:
+                            result, new_id, folder_path = sync_res
+                        else:
+                            # Fallback for old versions or unexpected returns
+                            result = sync_res[0] if isinstance(sync_res, tuple) else sync_res
+                            new_id = sync_res[1] if isinstance(sync_res, tuple) and len(sync_res) > 1 else None
+                            folder_path = sync_res[2] if isinstance(sync_res, tuple) and len(sync_res) > 2 else None
+                    except Exception as e_sync:
+                        log_message(f"⚡ [MEGA-SYNC] Critical Sync Error: {e_sync}")
+                        mega_sync_btn.disabled = False
+                        mega_sync_btn.update()
+                        return
+                    
+                    if result != True:
+                        if result == "already_synced":
+                            def on_confirm_re_mega(e_dlg):
+                                try: page.close(dlg)
+                                except: 
+                                    dlg.open = False
+                                    page.update()
+                                page.run_thread(lambda: _run_mega(force=True))
+                            
+                            def on_cancel_mega(e_dlg):
+                                try: page.close(dlg)
+                                except: 
+                                    dlg.open = False
+                                    page.update()
+                                mega_sync_btn.disabled = False
+                                mega_sync_btn.update()
+                            
+                            dlg = ft.AlertDialog(
+                                title=ft.Text("Already Synced"),
+                                content=ft.Text("This artifact was already downloaded. Do you want to download it again?"),
+                                actions=[
+                                    ft.TextButton("Yes, download again", on_click=on_confirm_re_mega),
+                                    ft.TextButton("No", on_click=on_cancel_mega),
+                                ]
+                            )
+                            try: page.open(dlg)
+                            except:
+                                page.overlay.append(dlg)
+                                dlg.open = True
+                                page.update()
+                            show_snack("Already up to date!", ft.Colors.BLUE_400)
+                        elif result == "already_old":
+                            show_snack("No new videos for today.", ft.Colors.ORANGE_400)
+                            mega_sync_btn.disabled = False
+                            mega_sync_btn.update()
+                        else:
+                            show_snack("Sync Failed.", ft.Colors.RED)
+                            mega_sync_btn.disabled = False
+                            mega_sync_btn.update()
+                        return
+
+                    # Success! Save the ID
+                    state.config.set_preference("last_github_artifact_id", str(new_id))
+                    
+                    # 2. Scan for videos in the new folder (RECURSIVE)
+                    log_message(f"⚡ [MEGA-SYNC] Scanning {folder_path} for videos (Recursive)...")
+                    new_videos = []
+                    
+                    for root, dirs, files in os.walk(folder_path):
+                        # Detect video file
+                        mp4_files = [f for f in files if f.endswith(".mp4")]
+                        video_file = None
+                        if mp4_files:
+                            main_videos = [f for f in mp4_files if "part" not in f.lower() and "scene" not in f.lower()]
+                            video_file = os.path.join(root, main_videos[0] if main_videos else mp4_files[0])
+                        
+                        if video_file:
+                            meta_path = os.path.join(root, "metadata.txt")
+                            json_meta_path = os.path.join(root, "metadata.json")
+                            
+                            # Try JSON first, then TXT
+                            meta = {}
+                            if os.path.exists(json_meta_path):
+                                try:
+                                    import json
+                                    with open(json_meta_path, 'r', encoding='utf-8') as f:
+                                        meta = json.load(f)
+                                except: pass
+                            
+                            if not meta and os.path.exists(meta_path):
+                                from src.upload_utils import parse_metadata
+                                meta = parse_metadata(meta_path) or {}
+                                
+                            new_videos.append({
+                                "video_path": video_file,
+                                "meta": meta
+                            })
+                    
+                    if not new_videos:
+                        log_message("⚡ [MEGA-SYNC] No videos found in the sync folder.")
+                        show_snack("Sync worked but no videos found.", ft.Colors.ORANGE)
+                        mega_sync_btn.disabled = False
+                        mega_sync_btn.update()
+                        return
+                    
+                    log_message(f"⚡ [MEGA-SYNC] Found {len(new_videos)} videos. Calculating schedule...")
+                    
+                    # 3. Calculate Slots
+                    # Initial slot: Today at 13:00
+                    now = datetime.now()
+                    current_date = now.date()
+                    target_hour = 13
+                    
+                    upload_items = []
+                    for video in new_videos:
+                        # Move to next slot if current slot is in the past
+                        while datetime.combine(current_date, datetime.min.time()).replace(hour=target_hour) < now:
+                            target_hour += 2
+                            if target_hour >= 24:
+                                target_hour = 13
+                                current_date += timedelta(days=1)
+                        
+                        item = video.copy()
+                        item["_mode"] = "schedule"
+                        item["_schedule_date"] = current_date
+                        item["_schedule_hour"] = target_hour
+                        upload_items.append(item)
+                        
+                        log_message(f"⚡ [MEGA-SYNC] Scheduled '{video['meta'].get('title', 'Video')}' for {current_date} at {target_hour}:00")
+                        
+                        # Advance for next video
+                        target_hour += 2
+                        if target_hour >= 24:
+                            target_hour = 13
+                            current_date += timedelta(days=1)
+                    
+                    # 4. START UPLOAD
+                    log_message(f"⚡ [MEGA-SYNC] Starting batch upload for {len(upload_items)} videos...")
+                    progress_row.visible = True
+                    page.update()
+                    
+                    try:
+                        state.uploader.start_process_mixed(upload_items, progress_callback=on_progress)
+                    except Exception as e_proc:
+                        log_message(f"⚡ [MEGA-SYNC] Error during upload: {e_proc}")
+                        show_snack(f"Process Error: {e_proc}", ft.Colors.RED)
+                    try:
+                        if mega_sync_btn.page:
+                            mega_sync_btn.disabled = False
+                            mega_sync_btn.update()
+                    except: pass
+
+                _run_mega()
+
+            page.run_thread(_task)
+
+        sync_btn = ft.IconButton(
+            icon=ft.Icons.CLOUD_DOWNLOAD,
+            icon_color=ft.Colors.BLUE_400,
+            tooltip="Descargar videos de GitHub",
+            on_click=on_github_sync
+        )
+
+        mega_sync_btn = ft.IconButton(
+            icon=ft.Icons.BOLT,
+            icon_color=ft.Colors.AMBER_400,
+            tooltip="MEGA-SYNC: Descargar, Programar y Subir TODO",
+            on_click=on_mega_sync
+        )
 
         main_upload_ui = ft.Container(visible=True, expand=True)
 
@@ -1802,7 +2056,17 @@ def main(page: ft.Page):
             
             async def update_ui():
                 try:
-                    if status == "starting":
+                    if status == "initializing":
+                        progress_text.value = "Iniciando Navegador..." # Using direct string if localization key is missing
+                        progress_text.color = ft.Colors.AMBER_400
+                        progress_bar.value = None
+                    elif status == "error":
+                        progress_text.value = f"Error: {video_name[:50]}..." if video_name else "Error al iniciar Navegador"
+                        progress_text.color = ft.Colors.RED
+                        progress_bar.value = 0
+                        close_btn.visible = True
+                        show_snack(f"Error Crítico: {video_name}", ft.Colors.RED)
+                    elif status == "starting":
                         progress_text.value = state.loc.get("progress_starting")
                         progress_text.color = ft.Colors.GREEN
                         progress_bar.color = ft.Colors.GREEN
@@ -1869,13 +2133,17 @@ def main(page: ft.Page):
         main_upload_ui.content = ft.Column([
              ft.Row([
                 ft.Text(state.loc.get("title_upload"), size=32, weight=ft.FontWeight.BOLD, color=ft.Colors.WHITE),
-                ft.Container(
-                    content=ft.Row([ft.Icon(ft.Icons.ROCKET, size=14, color="#F857A6"), ft.Text(state.loc.get("tag_ai_powered"), color="#F857A6", size=11, weight=ft.FontWeight.BOLD)], spacing=5),
-                    padding=ft.padding.symmetric(horizontal=12, vertical=6),
-                    border=ft.border.all(1, "#F857A6"),
-                    border_radius=20,
-                    bgcolor=ft.Colors.with_opacity(0.1, "#F857A6")
-                )
+                ft.Row([
+                    mega_sync_btn,
+                    sync_btn,
+                    ft.Container(
+                        content=ft.Row([ft.Icon(ft.Icons.ROCKET, size=14, color="#F857A6"), ft.Text(state.loc.get("tag_ai_powered"), color="#F857A6", size=11, weight=ft.FontWeight.BOLD)], spacing=5),
+                        padding=ft.padding.symmetric(horizontal=12, vertical=6),
+                        border=ft.border.all(1, "#F857A6"),
+                        border_radius=20,
+                        bgcolor=ft.Colors.with_opacity(0.1, "#F857A6")
+                    )
+                ], spacing=10)
             ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
             
             ft.Text(state.loc.get("msg_history_desc"), size=14, color=ft.Colors.GREY_500),
@@ -1965,6 +2233,10 @@ def main(page: ft.Page):
         pexels_link = ft.ElevatedButton("Obtener API", icon=ft.Icons.OPEN_IN_NEW, tooltip="Ir a Pexels", on_click=lambda e: webbrowser.open("https://www.pexels.com/api/key"), style=ft.ButtonStyle(color=ACCENT_COLOR))
         pexels_row = ft.Row([pexels_api, pexels_link], vertical_alignment=ft.CrossAxisAlignment.CENTER)
         
+        github_token = ft.TextField(label="GitHub Personal Access Token (PAT)", value=state.config.get_api_key("github_token"), password=True, can_reveal_password=True, border_color=ACCENT_COLOR, expand=True)
+        github_repo = ft.TextField(label="GitHub Repository (user/repo)", value=state.config.get_preference("github_repo", "TiagoRon/fin_yt3223-43432"), border_color=ACCENT_COLOR, expand=True)
+        github_row = ft.Row([github_token], vertical_alignment=ft.CrossAxisAlignment.CENTER)
+        
         languages = [ft.dropdown.Option("English"), ft.dropdown.Option("Español")]
         
         # Load the raw 2-letter code from prefs (e.g. "en" or "es")
@@ -2022,12 +2294,13 @@ def main(page: ft.Page):
             try:
                 state.config.set_api_key("google_gemini", google_api.value)
                 state.config.set_api_key("pexels", pexels_api.value)
-                
+                state.config.set_api_key("github_token", github_token.value)
                 
                 # We expect the exact literal string "English" or "Español"
                 lang_code = "en" if lang_drop.value.strip() == "English" else "es"
                 state.config.set_preference("language", lang_code)
                 state.config.set_preference("watermark", watermark.value)
+                state.config.set_preference("github_repo", github_repo.value)
                 state.config.set_preference("boost_video", str(boost_switch.value))
                 
                 # Update live localization for the UI
@@ -2078,6 +2351,8 @@ def main(page: ft.Page):
                      ft.Container(height=10),
                      google_row,
                      pexels_row,
+                     github_row,
+                     github_repo,
                      ft.Container(height=20),
                      ft.Divider(color="#2b303b"),
                      ft.Container(height=10),

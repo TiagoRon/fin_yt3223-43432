@@ -394,6 +394,7 @@ def create_title_card(text, duration=2.5, width=VIDEO_WIDTH, height=VIDEO_HEIGHT
     return clip
 
 def create_karaoke_clips(word_timings, duration, start_offset, width=VIDEO_WIDTH, height=VIDEO_HEIGHT, fontsize=75, raw_text="", is_header=False):
+    import re
     # Professional Shorts Style: Single Line Focused
     if is_header:
         fontsize = 60 # Slightly smaller to fit box

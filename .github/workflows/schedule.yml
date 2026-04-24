@@ -2,7 +2,7 @@ name: putita
 
 on:
   schedule:
-    - cron: '0 10 * * *' # 10:00 UTC = 7:00 AM Argentina
+    - cron: '0 0,6,12,18 * * *' # Cada 6 horas (00:00, 06:00, 12:00, 18:00 UTC)
   workflow_dispatch:
 
 jobs:
@@ -15,11 +15,16 @@ jobs:
       contents: write
 
     steps:
-    - name: Free Space
+    - name: Cleanup Old Runs (older than 3 days)
       env:
         GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
-        gh run list --status completed --limit 5 --json databaseId -q '.[].databaseId' | xargs -I {} gh run delete {} || echo "No runs to delete"
+        # Calculate date 3 days ago in YYYY-MM-DD format
+        CUTOFF_DATE=$(date -d "3 days ago" +%Y-%m-%d)
+        echo "Deleting runs created before $CUTOFF_DATE"
+        
+        # List and delete runs
+        gh run list --created "<$CUTOFF_DATE" --json databaseId -q '.[].databaseId' | xargs -I {} gh run delete {} || echo "No old runs to delete."
 
     - name: Checkout code
       uses: actions/checkout@v4

@@ -11,11 +11,13 @@ class ConfigManager:
             return {
                 "api_keys": {
                     "google_gemini": "",
-                    "pexels": ""
+                    "pexels": "",
+                    "github_token": ""
                 },
                 "preferences": {
                     "language": "en",
-                    "watermark": "@AIShortsGenerator"
+                    "watermark": "@AIShortsGenerator",
+                    "github_repo": "TiagoRon/fin_yt3223-43432"
                 }
             }
         try:

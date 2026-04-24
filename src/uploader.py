@@ -21,11 +21,32 @@ def get_driver(headless=False):
         os.makedirs(profile_path)
         
     # Remove lock files to prevent SessionNotCreated errors on crash/restart
-    for lock_name in ["SingletonLock", "SingletonCookie", "SingletonSocket"]:
-        lock_file = os.path.join(profile_path, lock_name)
-        if os.path.exists(lock_file):
-            try: os.remove(lock_file)
-            except: pass
+    # On Windows, these files prevent a new instance from starting if the previous one didn't close cleanly.
+    lock_files = ["SingletonLock", "SingletonCookie", "SingletonSocket", "lock"]
+    
+    def try_remove_locks():
+        removed_all = True
+        for lock_name in lock_files:
+            lock_file = os.path.join(profile_path, lock_name)
+            if os.path.exists(lock_file):
+                try: 
+                    os.remove(lock_file)
+                    print(f"Removed old Chrome lock: {lock_name}")
+                except Exception:
+                    removed_all = False
+        return removed_all
+
+    if not try_remove_locks():
+        print("Profile locked. Attempting to force-close Chrome processes...")
+        import subprocess
+        try:
+            # Kill any running Chrome or ChromeDriver processes to release locks
+            subprocess.run(["taskkill", "/f", "/im", "chrome.exe", "/t"], capture_output=True)
+            subprocess.run(["taskkill", "/f", "/im", "chromedriver.exe", "/t"], capture_output=True)
+            time.sleep(2) # Wait for OS to release file handles
+            try_remove_locks() # Try again after killing
+        except Exception as e:
+            print(f"Force-close failed: {e}")
             
     # Auto-delete corrupt JSON template files that cause EOF errors
     import json
@@ -68,56 +89,37 @@ def get_driver(headless=False):
 
 def check_login_status():
     """
-    Silently and instantly checks if the profile exists and has cookies.
-    This avoids launching a headless browser which locks the profile.
+    Chequea de forma silenciosa e instantánea si existe el perfil y tiene cookies.
+    Evita lanzar un navegador headless que bloquearía el perfil.
     """
+    import os
     import tempfile
+    
+    # Ruta al archivo de cookies del perfil que usa la App
     profile_path = os.path.join(tempfile.gettempdir(), "Venta_APP_Chrome_Profile", "Default", "Network", "Cookies")
+    
     if os.path.exists(profile_path):
         try:
-            # A fresh profile without Google login usually has < 10KB of cookies
-            # A logged-in Google session generates a Cookies file usually > 15-20KB
-            if os.path.getsize(profile_path) >= 8000:
+            # Un perfil virgen sin login de Google suele tener < 10KB de cookies.
+            # Una sesión iniciada genera un archivo de Cookies de más de 20KB.
+            if os.path.getsize(profile_path) >= 8000: # 8KB como umbral de seguridad
                 return True
         except:
             pass
     return False
 
 def logout_user():
-    """
-    Forcefully log out the user by deleting the Chrome profile directory.
-    Uses aggressive lock bypassing if Chrome left ghost processes behind.
-    """
+    """Borra la carpeta del perfil de Chrome para forzar el cierre de sesión."""
     import tempfile
     import shutil
-    import uuid
-    import subprocess
-    
-    # 1. Kill any dangling chromedriver processes to release file locks on Windows
-    # (Safe to run since the user's main personal Chrome doesn't run via chromedriver)
-    try:
-        subprocess.run(['taskkill', '/f', '/im', 'chromedriver.exe'], capture_output=True, creationflags=subprocess.CREATE_NO_WINDOW)
-    except: pass
-    
-    time.sleep(0.5)
-
     profile_path = os.path.join(tempfile.gettempdir(), "Venta_APP_Chrome_Profile")
     if os.path.exists(profile_path):
         try:
-            shutil.rmtree(profile_path, ignore_errors=False)
-            print("Chrome Profile deleted. User logged out.")
+            shutil.rmtree(profile_path)
             return True
-        except Exception as e:
-            # Fallback for strong Windows locks: Rename the directory randomly
-            try:
-                trashed_name = profile_path + "_DEAD_" + str(uuid.uuid4())[:8]
-                os.rename(profile_path, trashed_name)
-                print(f"Profile locked. Renamed to {trashed_name} to force logout.")
-                return True
-            except Exception as e2:
-                print(f"Failed to delete or rename Chrome profile: {e2}")
-                return False
-    return True
+        except:
+            return False
+    return False
 
 def open_browser_for_login(on_login_success=None):
     """
@@ -158,25 +160,87 @@ def open_browser_for_login(on_login_success=None):
         print(f"Login Browser Error: {e}")
 
 def safe_send_keys(driver, element, text):
-    """Types text safely, filtering non-BMP characters that ChromeDriver can't handle."""
-    # Filter out non-BMP characters (emojis, special symbols above U+FFFF)
-    clean_text = "".join(c for c in text if ord(c) <= 0xFFFF)
-    
+    """Types text safely avoiding TrustedHTML errors and ensuring YouTube syncs state."""
     try:
-        element.clear()
-        for char in clean_text:
-            element.send_keys(char)
-            time.sleep(0.05)
-    except Exception:
-        # Fallback: use JavaScript to set text directly
+        # 1. Focus the element
+        driver.execute_script("arguments[0].focus();", element)
+        time.sleep(0.2)
+        
+        # 2. Clear content via keys (Most robust for contenteditable)
+        # We use Control+A followed by Backspace to clear everything YouTube put there by default
+        from selenium.webdriver.common.keys import Keys
+        element.send_keys(Keys.CONTROL + "a")
+        element.send_keys(Keys.BACKSPACE)
+        time.sleep(0.2)
+        
+        # 3. Clear via JS using safe properties (Avoid innerHTML)
+        # innerText and textContent are usually allowed by TrustedHTML policies
+        driver.execute_script(
+            "arguments[0].innerText = ''; "
+            "arguments[0].textContent = ''; "
+            "arguments[0].dispatchEvent(new Event('input', {bubbles: true})); "
+            "arguments[0].dispatchEvent(new Event('change', {bubbles: true}));",
+            element
+        )
+        time.sleep(0.1)
+        
+        # 4. Set text via JS (Supports emojis/complex chars)
+        driver.execute_script(
+            "arguments[0].innerText = arguments[1]; "
+            "arguments[0].dispatchEvent(new Event('input', {bubbles: true})); "
+            "arguments[0].dispatchEvent(new Event('change', {bubbles: true}));",
+            element, text
+        )
+        
+        # 5. Trigger an extra keyboard event to ensure YouTube's internal 'save' state is dirty
+        # Sometimes setting innerText via JS doesn't enable the 'Next' button if no keyboard event followed.
+        element.send_keys(" ")
+        element.send_keys(Keys.BACKSPACE)
+        time.sleep(0.2)
+        
+    except Exception as e:
+        print(f"safe_send_keys failed: {e}")
+        # Fallback to pure Selenium
         try:
-            driver.execute_script(
-                "arguments[0].innerText = arguments[1]; "
-                "arguments[0].dispatchEvent(new Event('input', {bubbles: true}));",
-                element, clean_text
-            )
-        except Exception as js_err:
-            print(f"safe_send_keys JS fallback failed: {js_err}")
+            element.send_keys(Keys.CONTROL + "a")
+            element.send_keys(Keys.BACKSPACE)
+            element.send_keys(text)
+        except: pass
+
+def close_studio_popups(driver):
+    """
+    Looks for and closes common YouTube Studio popups/overlays
+    that might block interaction with the upload buttons.
+    """
+    popups_selectors = [
+        "//ytcp-button[@id='dismiss-button']",
+        "//ytcp-button[contains(text(), 'Dismiss')]",
+        "//ytcp-button[contains(text(), 'Entendido')]",
+        "//ytcp-button[contains(text(), 'Cerrar')]",
+        "//ytcp-button[contains(text(), 'Close')]",
+        "//ytcp-button[contains(text(), 'Got it')]",
+        "//div[contains(@class, 'dismiss-button')]",
+        "//ytcp-dialog//ytcp-button"
+    ]
+    
+    found_any = False
+    # Check multiple times with small delay to catch popups that appear after a few seconds
+    for _ in range(3):
+        for selector in popups_selectors:
+            try:
+                elements = driver.find_elements(By.XPATH, selector)
+                for el in elements:
+                    if el.is_displayed():
+                        print(f"Closing YouTube Studio popup: {selector}")
+                        try: el.click()
+                        except: driver.execute_script("arguments[0].click();", el)
+                        found_any = True
+            except:
+                pass
+        if found_any:
+            time.sleep(1)
+            found_any = False # Continue checking for others
+        time.sleep(1)
 
 def wait_for_processing(driver, wait, cancel_check=None):
     """
@@ -257,18 +321,51 @@ def upload_video_selenium(driver, video_path, title, description, tags=None, pri
     try:
         driver.get("https://studio.youtube.com")
         wait = WebDriverWait(driver, 60)
+        
+        # 0. Check if we are redirected to login
+        current_url = driver.current_url
+        if "accounts.google.com" in current_url:
+            print("❌ Error: No se detectó sesión iniciada. Por favor, haz login en la App primero.")
+            return "not_logged_in"
+
+        # 1. Clean up potential popups that block the screen
+        print("Checking for blocking popups...")
+        close_studio_popups(driver)
 
         print("Navigating to Upload Page...")
-        try:
-            upload_button = wait.until(EC.element_to_be_clickable((By.ID, "upload-icon")))
-            upload_button.click()
-        except:
-            print("Fallback: Using create-icon...")
-            create_btn = wait.until(EC.element_to_be_clickable((By.ID, "create-icon")))
-            create_btn.click()
-            time.sleep(1)
-            upload_menu_item = wait.until(EC.element_to_be_clickable((By.XPATH, "//*[@id='text-item-0' or contains(text(), 'Upload') or contains(text(), 'Subir')]")))
-            upload_menu_item.click()
+        upload_success = False
+        
+        # Try primary button (The big 'Upload' icon in the middle)
+        for attempt in range(3):
+            try:
+                # Multiple possible selectors for the upload icon/button
+                upload_button = wait.until(EC.element_to_be_clickable((By.XPATH, "//*[@id='upload-icon'] | //*[@id='upload-button'] | //ytcp-button[@id='upload-button']")))
+                upload_button.click()
+                upload_success = True
+                print("Primary upload button clicked.")
+                break
+            except Exception:
+                if attempt < 2:
+                    print(f"Retrying upload button detection ({attempt+1}/3)...")
+                    close_studio_popups(driver)
+                    time.sleep(2)
+                
+        if not upload_success:
+            print("Fallback: Using 'Create' menu...")
+            try:
+                create_btn = wait.until(EC.element_to_be_clickable((By.ID, "create-icon")))
+                create_btn.click()
+                time.sleep(1)
+                
+                # Look for 'Upload' in various languages or IDs
+                upload_menu_item = wait.until(EC.element_to_be_clickable((By.XPATH, 
+                    "//*[@id='text-item-0'] | //*[contains(text(), 'Subir')] | //*[contains(text(), 'Upload')] | //*[contains(text(), 'Enviar')]"
+                )))
+                upload_menu_item.click()
+                upload_success = True
+            except Exception as e:
+                print(f"All upload initiation methods failed: {e}")
+                return False
 
         file_input = wait.until(EC.presence_of_element_located((By.XPATH, "//input[@type='file']")))
         file_input.send_keys(video_path)
@@ -322,44 +419,44 @@ def upload_video_selenium(driver, video_path, title, description, tags=None, pri
 
         # Cycle through 'Next' buttons
         for i in range(3):
+            print(f"Clicking Next ({i+1}/3)...")
             next_btn = wait.until(EC.element_to_be_clickable((By.ID, "next-button")))
-            next_btn.click()
-            time.sleep(1)
+            driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", next_btn)
+            time.sleep(0.5)
+            try:
+                next_btn.click()
+            except:
+                driver.execute_script("arguments[0].click();", next_btn)
+            time.sleep(2) # Wait for tab transition animation
 
         # Visibility / Schedule
         print(f"Setting visibility... ({privacy_status})")
         if privacy_status == "schedule" and schedule_date and schedule_time:
              print(f"Scheduling requested for {schedule_date} at {schedule_time}")
              
-             # YouTube changed the DOM completely. IDs and Names are gone. Search by text.
+             # YouTube changed the DOM. ID: schedule-section-header
              try:
-                 print("Looking for Schedule/Programar text...")
-                 wait.until(lambda d: d.find_elements(By.XPATH, "//*[text()='Programar' or text()='Schedule' or contains(text(), 'Programar') or contains(text(), 'Schedule')]"))
-                 
-                 # Look for exact matches first (usually the main radio/accordion header)
-                 els = driver.find_elements(By.XPATH, "//*[text()='Programar' or text()='Schedule']")
-                 if not els:
-                     els = driver.find_elements(By.XPATH, "//*[contains(text(), 'Programar') or contains(text(), 'Schedule')]")
-                 
-                 clicked = False
-                 for el in els:
-                     try:
+                 print("Looking for Schedule section...")
+                 schedule_tab = None
+                 try:
+                     schedule_tab = wait.until(EC.element_to_be_clickable((By.ID, "schedule-section-header")))
+                 except:
+                     # Fallback to text search
+                     els = driver.find_elements(By.XPATH, "//*[text()='Programar' or text()='Schedule' or contains(text(), 'Programar') or contains(text(), 'Schedule')]")
+                     for el in els:
                          if el.is_displayed():
-                             try:
-                                 el.click()
-                             except:
-                                 driver.execute_script("arguments[0].click();", el)
-                             clicked = True
-                             # We break on the first successful click, which is usually the topmost correct element
+                             schedule_tab = el
                              break
-                     except: pass
                  
-                 if not clicked and els:
-                     # Force JS click on the first one if all else fails
-                     driver.execute_script("arguments[0].click();", els[0])
-                     
+                 if schedule_tab:
+                     try: schedule_tab.click()
+                     except: driver.execute_script("arguments[0].click();", schedule_tab)
+                     print("Schedule section expanded.")
+                 else:
+                     print("❌ Could not find Schedule section header.")
+                 
              except Exception as e:
-                 print(f"Error clicking Schedule tab: {e}")
+                 print(f"Error expanding Schedule tab: {e}")
              
              time.sleep(1)
              
@@ -379,8 +476,12 @@ def upload_video_selenium(driver, video_path, title, description, tags=None, pri
                          es_m = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"]
                          en_m = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
                          
-                         is_english = current_date_val and any(en in current_date_val for en in en_m)
-                         if is_english:
+                         # Robust detection: check for any month name (case-insensitive) in current_date_val
+                         current_val_lower = current_date_val.lower() if current_date_val else ""
+                         is_english = any(en.lower() in current_val_lower for en in en_m)
+                         is_spanish = any(es.lower() in current_val_lower for es in es_m)
+                         
+                         if is_english or not is_spanish: # Default to English if unsure
                              schedule_date = f"{en_m[m-1]} {d:02d}, {y}"
                          else:
                              schedule_date = f"{d:02d} {es_m[m-1]} {y}"
@@ -468,10 +569,28 @@ def upload_video_selenium(driver, video_path, title, description, tags=None, pri
              private_radio = wait.until(EC.element_to_be_clickable((By.NAME, "PRIVATE")))
              private_radio.click()
 
-        done_btn = wait.until(EC.element_to_be_clickable((By.ID, "done-button")))
-        done_btn.click()
+        # FINAL BUTTON: Search by ID first, then by common text
+        print("Clicking Final Button...")
+        try:
+            done_btn = wait.until(EC.element_to_be_clickable((By.ID, "done-button")))
+            done_btn.click()
+        except:
+            # Fallback for text-based click
+            print("Fallback final button click by text...")
+            btns = driver.find_elements(By.XPATH, "//ytcp-button")
+            found = False
+            for b in btns:
+                txt = b.text.lower()
+                if any(k in txt for k in ["programar", "schedule", "listo", "done", "publicar", "publish", "guardar", "save"]):
+                    if b.is_displayed():
+                        try: b.click()
+                        except: driver.execute_script("arguments[0].click();", b)
+                        found = True
+                        break
+            if not found:
+                print("❌ Could not find final button by text either.")
         
-        print("Successfully uploaded. Waiting for final confirmation dialog to close...")
+        print("Successfully uploaded. Waiting for final confirmation...")
         time.sleep(5)
         return True
 
