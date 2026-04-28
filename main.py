@@ -55,8 +55,13 @@ def run_batch(count, topic=None, use_trends=False, style="curiosity", log_func=p
     
     success_count = 0
     generated_folders = []
+    total_attempts = 0
+    max_total_attempts = count * 3 # Allow up to 3 tries per requested video
 
-    for i in range(count):
+    while success_count < count and total_attempts < max_total_attempts:
+        total_attempts += 1
+        i = success_count # For logging and percentage calculation
+
         # Cancellation Check
         if is_cancelled and is_cancelled():
             log_func(loc.get("status_cancelled") if loc else "Generation cancelled by user.")
@@ -73,7 +78,7 @@ def run_batch(count, topic=None, use_trends=False, style="curiosity", log_func=p
         status_base = loc.get("status_processing").format(count) if loc else f"Processing {count} video(s)..."
         report_prog(0.02, status_base, "Generando idea y guion con Inteligencia Artificial...")
 
-        log_func(f"\n--- {loc.get('title_generator') if loc else 'Generating Video'} {i+1}/{count} ---")
+        log_func(f"\n--- {loc.get('title_generator') if loc else 'Generating Video'} {i+1}/{count} (Intento total {total_attempts}) ---")
         
         current_hook = None
         current_topic = topic
@@ -206,7 +211,7 @@ def run_batch(count, topic=None, use_trends=False, style="curiosity", log_func=p
                     break
 
         if not script:
-            log_func(loc.get('log_script_error_skip') if loc else "Error generating script. Skipping...")
+            log_func(loc.get('log_script_error_skip') if loc else "Error generating script. Skipping attempt...")
             continue
         
         log_func(f"   {(loc.get('log_title') if loc else 'Title:')} {script.get('title', 'Untitled')}")

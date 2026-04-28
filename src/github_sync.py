@@ -7,12 +7,12 @@ from src.upload_utils import extract_archive
 
 class GitHubSync:
     def __init__(self, token, repo, log_callback=print):
-        self.token = token
-        self.repo = repo
+        self.token = token.strip() if token else ""
+        self.repo = repo.strip() if repo else ""
         self.log = log_callback
-        self.base_url = f"https://api.github.com/repos/{repo}"
+        self.base_url = f"https://api.github.com/repos/{self.repo}"
         self.headers = {
-            "Authorization": f"Bearer {token}",
+            "Authorization": f"Bearer {self.token}",
             "Accept": "application/vnd.github+json",
             "X-GitHub-Api-Version": "2022-11-28"
         }
@@ -29,7 +29,10 @@ class GitHubSync:
             self.log(f"Fetching artifacts for {self.repo}...")
             response = requests.get(f"{self.base_url}/actions/artifacts", headers=self.headers)
             
-            if response.status_code != 200:
+            if response.status_code == 401:
+                self.log("Error: GitHub Token is invalid (Bad credentials). Please check your PAT in Settings.")
+                return False, None, None
+            elif response.status_code != 200:
                 self.log(f"Error fetching artifacts: {response.status_code} - {response.text}")
                 return False, None, None
                 
