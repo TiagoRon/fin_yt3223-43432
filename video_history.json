@@ -123,7 +123,11 @@
     "3 Cosas Increíbles Que Podrías Hallar En Una Burbuja Temporal",
     "Top 3 Leyendas Urbanas Más Perturbadoras",
     "Top 3 Tesoros Olvidados: ¡Descubre Joyas Ocultas!",
-    "Top 3 Lugares Olvidados Que Debes Conocer"
+    "Top 3 Lugares Olvidados Que Debes Conocer",
+    "Qué Pasaría Si la Gravedad Solo Funcionara Hacia Arriba",
+    "3 Inventos Olvidados que Cambiaron el Mundo",
+    "Si los Recuerdos Fuera Tangibles",
+    "Los 3 Miedos Más Extraños de los Gatos"
   ],
   "used_trends": [
     "Si nunca tuviéramos sueño",
@@ -185,7 +189,9 @@
     "Top 3 Cosas Que Podrías Encontrar En Una Burbuja Temporal.",
     "{English}Top 3 Unsettling Urban Legends",
     "Top 3 Tesoros Olvidados",
-    "Top 3 Lugares Olvidados {es}"
+    "Top 3 Lugares Olvidados {es}",
+    "{English}Top 3 Forgotten Inventions",
+    "{es}Top 3 Miedos Inesperados de los Gatos{/es}"
   ],
   "used_topics": [
     "Si el internet dejara de existir",
@@ -211,6 +217,8 @@
     "¿Qué pasaría si el tiempo se pudiera almacenar y consumir?",
     "¿Qué pasaría si el tiempo fuera líquido y pudieras nadar en él?",
     "Qué pasaría si los recuerdos fueran físicos y pudieran ser robados",
-    "¿Qué pasaría si el tiempo se pudiera comprar y vender en el mercado?"
+    "¿Qué pasaría si el tiempo se pudiera comprar y vender en el mercado?",
+    "Qué pasaría si la gravedad solo funcionara en un sentido",
+    "¿Y si los recuerdos fueran tangibles y se pudieran intercambiar?"
   ]
 }
