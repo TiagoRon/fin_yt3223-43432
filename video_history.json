@@ -127,7 +127,11 @@
     "Qué Pasaría Si la Gravedad Solo Funcionara Hacia Arriba",
     "3 Inventos Olvidados que Cambiaron el Mundo",
     "Si los Recuerdos Fuera Tangibles",
-    "Los 3 Miedos Más Extraños de los Gatos"
+    "Los 3 Miedos Más Extraños de los Gatos",
+    "¿Qué pasaría si el tiempo fuera tangible?",
+    "3 Objetos Cotidianos con Secretos Ocultos que No Creerás",
+    "Si el Tiempo Fuera una Sustancia: Un Mundo Nuevo",
+    "Las 3 Invenciones Paradójicas Más Asombrosas"
   ],
   "used_trends": [
     "Si nunca tuviéramos sueño",
@@ -191,7 +195,9 @@
     "Top 3 Tesoros Olvidados",
     "Top 3 Lugares Olvidados {es}",
     "{English}Top 3 Forgotten Inventions",
-    "{es}Top 3 Miedos Inesperados de los Gatos{/es}"
+    "{es}Top 3 Miedos Inesperados de los Gatos{/es}",
+    "Top 3 objetos cotidianos con secretos ocultos",
+    "{English}: Top 3 Paradoxical Inventions"
   ],
   "used_topics": [
     "Si el internet dejara de existir",
@@ -219,6 +225,8 @@
     "Qué pasaría si los recuerdos fueran físicos y pudieran ser robados",
     "¿Qué pasaría si el tiempo se pudiera comprar y vender en el mercado?",
     "Qué pasaría si la gravedad solo funcionara en un sentido",
-    "¿Y si los recuerdos fueran tangibles y se pudieran intercambiar?"
+    "¿Y si los recuerdos fueran tangibles y se pudieran intercambiar?",
+    "¿Qué pasaría si el tiempo fuera una sustancia física que pudiéramos tocar?",
+    "¿Y si el tiempo fuera una sustancia tangible que se pudiera recolectar y almacenar?"
   ]
 }
