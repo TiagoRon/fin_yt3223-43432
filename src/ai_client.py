@@ -37,33 +37,31 @@ def generate_script(topic=None, specific_hook=None, style="curiosity", is_test=F
              topic_instruction = "TOPIC: Choose a RANDOM 'Top 3' list (e.g. Top 3 Most Dangerous Roads)."
          
          system_instruction = """
-         STYLE: "TOP 3 RANKING" (Countdown).
+         STYLE: "TOP 3 RANKING" (Viral Countdown).
          STRUCTURE (MANDATORY):
-         - HOOK (2-3 scenes): Quick intro of the topic. NO vague hype. State WHY this topic is interesting with a concrete hook fact.
-         - POSITION 3 (3-4 scenes): The narration script MUST EXACTLY start with 'En el Top 3: [REAL EXACT NAME]' or 'En el Puesto 3: [REAL EXACT NAME]'. Do NOT skip this detail. Then give:
-             * The year it was released/happened.
-             * Focus 100% on the PLOT, the CHARACTERS, or the CONTENT itself. Do NOT talk extensively about the creators, directors, or real-world staff.
-             * A concrete achievement: box office number, award won, record broken, or historical milestone.
-             * ONE specific memorable detail (a scene, a line, a character, an anecdote) that makes it stand out.
-         - POSITION 2 (3-4 scenes): Same structure as Position 3. MUST start narration with 'En el Puesto 2:'.
-         - POSITION 1 (3-4 scenes): Same structure. MUST start narration with 'En el Puesto 1:' plus WHY it is the undisputed #1.
-         - CONCLUSION (1 scene): One strong, concrete closing line. NO filler like 'these are amazing'. Give a final thought-provoking fact.
-         TONE: Informative, direct, slightly enthusiastic. Imagine a knowledgeable friend explaining WHY each item matters.
-         CRITICAL: Every scene must contain at least ONE specific verifiable datum (year, name, number, award, country). ZERO vague sentences.
-         DO NOT USE the Perfect Loop rule. The conclusion must be a proper ending, not repeating the intro.
+         - HOOK (2-3 scenes): Start with the BIGGEST mystery or the most shocking fact about the #1 spot without revealing what it is. Generate an immediate need to know.
+         - POSITION 3 (3-4 scenes): Introduce it naturally. Example: 'Empezamos con algo que desafía la física...', 'En el lugar 3 tenemos...'.
+             * The narration must focus on the SHOCK VALUE. 
+             * Give: Year/Name, a concrete achievement, and ONE bizarre detail.
+         - POSITION 2 (3-4 scenes): Use a transition that builds tension. 'Pero si creías que eso era raro, mira esto...'.
+         - POSITION 1 (3-4 scenes): The climax. 'Finalmente, el puesto que todos esperaban...'. Explain WHY it's the undisputed winner.
+         - CONCLUSION (1 scene): A final thought that connects all three or poses a question to the viewer.
+         TONE: Enthusiastic, fast-paced, like a high-end documentary.
+         CRITICAL: Every scene MUST have a specific name or number. ZERO filler sentences.
          """
     elif style == "dark_facts":
          if topic:
-             topic_instruction = f"TOPIC: '{topic}'. Focus on highly viral, unsettling, or mind-blowing dark facts."
+             topic_instruction = f"TOPIC: '{topic}'. Focus on the most unsettling, mysterious, or mind-blowing psychological/historical facts."
          else:
-             topic_instruction = "TOPIC: Choose a RANDOM 'Dark Fact' or disturbing psychological/historical truth that is HIGHLY VIRAL and fascinating for a broad audience."
+             topic_instruction = "TOPIC: Choose a RANDOM 'Dark Fact' or disturbing truth that is SHOCKING and forces the viewer to think 'how is this possible?'."
          
          system_instruction = """
-         STYLE: "VIRAL DARK FACTS" / CREEPY TRUE STORIES.
-         - Hook: MUST start with "El oscuro secreto de..." or "Lo que no quieren que sepas sobre...".
-         - Tone: Hooking, mysterious, slightly disturbing, suspenseful.
-         - CRITICAL: All facts MUST be historically or scientifically accurate. Do NOT make up stories. Use REAL names and REAL verified events.
-         - Climax: Leave the viewer with a chilling thought that forces engagement.
+         STYLE: "VIRAL MYSTERY" / PSYCHOLOGICAL DARKNESS.
+         - Hook: NEVER start with 'Sabías que'. START with a shocking statement or a terrifying question.
+         - Examples: 'Tu cerebro te está mintiendo ahora mismo...', 'El gobierno ocultó esto por 50 años...', 'Lo que ocurre en este lugar desafía la lógica...'.
+         - Tone: Suspenseful, whisper-like intensity, cinematic.
+         - CRITICAL: Use REAL cases but emphasize the 'horror' or 'unexplained' aspect.
+         - Climax: A final revelation that makes the viewer feel uncomfortable or amazed.
          """
     elif style == "history":
          if topic:
@@ -92,19 +90,21 @@ def generate_script(topic=None, specific_hook=None, style="curiosity", is_test=F
          - CRITICAL: If the prompt implies real-world topics (like sports, history, science), you MUST use 100% REAL facts, REAL names, and REAL verified information. NEVER hallucinate fictional generic examples.
          """
     else:
-        # Default Curiosity
+        # Default Curiosity / Storytelling
         if topic and not specific_hook:
-            topic_instruction = f"TOPIC: '{topic}'. Generate a script about an EXTREMELY VIRAL, HIGHLY VISUAL, and mind-blowing curiosity regarding this topic."
+            topic_instruction = f"TOPIC: '{topic}'. Create a script that reveals a SHOCKING SECRET or a COUNTER-INTUITIVE truth about this."
         elif specific_hook:
-            topic_instruction = f"""
-            CORE INSTRUCTION: You must write a script that starts EXACTLY with this hook: "{specific_hook}".
-            The script must be about the implied topic of the hook.
-            Do NOT change the hook text.
-            """
+            topic_instruction = f"START EXACTLY WITH THIS HOOK: '{specific_hook}'. Then build a story around it."
         else:
-            topic_instruction = "TOPIC: Choose a RANDOM, EXTREMELY VIRAL AND VISUALLY STUNNING curiosity about human psychology, pop culture, universe, or modern science. It MUST be highly relevant to a modern audience. Do NOT use the octopus example. Do NOT talk about boring academic facts."
+            topic_instruction = "TOPIC: Choose a RANDOM topic that sounds like a 'Hidden Truth' or a 'Bizarre Reality' (e.g., hidden rooms in famous places, weird laws, animal superpowers)."
         
-        system_instruction = "STYLE: VIRAL TIKTOK CURIOSITY / DID YOU KNOW."
+        system_instruction = """
+        STYLE: VIRAL STORYTELLER / HIGH RETENTION.
+        - The Goal: Make the user forget they are watching a video and get lost in the story.
+        - Narrative Arc: Start with a mystery, build tension with 3 shocking details, and end with a 'mind-blown' realization.
+        - NO 'AI language': Avoid words like 'fascinante', 'increíble', 'asombroso'. Use everyday but impactful words.
+        - Pacing: Fast, punchy, no redundant words.
+        """
 
     test_instruction = ""
     if is_test:
@@ -145,8 +145,12 @@ def generate_script(topic=None, specific_hook=None, style="curiosity", is_test=F
        - **CRITICAL**: The total length of `tags_string` MUST BE under 500 characters.
     
     RULES:
-    0. **Content Quality & Accuracy (CRITICAL)**: You MUST use REAL WORLD facts, REAL names of actual people, REAL anime logic/power levels, and REAL verified data. NEVER invent names or fake statistics. ZERO-TOLERANCE FOR HALLUCINATION: If you do not know the exact fact, year, or number, DO NOT invent it. Drop it and speak in general true terms. ZERO filler or generic narrative ("flojo"). NO phrases like '¡Prepárate!', 'Este video es para ti', 'Hoy te voy a contar', or any hype phrase. Every single sentence MUST hit hard with a specific fact.
-    1. **Natural but Catchy Pacing (CRITICAL)**: Write natural, complete, and coherent sentences. DO NOT write confusing fragments or drop words. Sentences should be about 10 to 18 words to keep it fast-paced, but MUST be grammatically complete and make perfect sense. Visual changes happen every 2-3 seconds, so keep the narrative moving smoothly without losing coherence.
+    0. **STORYTELLING OVER FACTS (CRITICAL)**: While facts must be REAL, the way you tell them is what matters. Don't just list them. Connect them. Start with a "Curiosity Gap" (tell them what they DON'T know first). Never use intro phrases like 'En este video...', 'Hola a todos', or generic greetings. Jump STRAIGHT into the action.
+    1. **Natural & Provocative Pacing**: Write like a human talking to a friend about something crazy they just found out. Use short, punchy sentences. Avoid being overly formal or "educational".
+    2. **Viral Titles (SEO_TITLE)**: Generate titles that trigger FOMO (Fear Of Missing Out) or extreme curiosity. 
+       - Bad: "3 Datos sobre Marte"
+       - Good: "Lo que la NASA no te contó de Marte" o "Por esto nunca podremos vivir en Marte".
+       - Use "The Reason Why", "The Secret of", "Nobody talks about this", "This is illegal in...".
     2. **Scenes Total**: {"ONLY 2 SCENES" if is_test else "13-15 Micro-Scenes Minimum. You MUST break down every single sentence into 2-3 visual beats. For TOP 3 style: each ranked item gets at least 3-4 scenes."}
     3. **Visual Variety**: Use different angles (close-up, wide, drone) for consecutive shots.
     {loop_rule}
