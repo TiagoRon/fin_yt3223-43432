@@ -219,39 +219,51 @@ def generate_script(topic=None, specific_hook=None, style="curiosity", is_test=F
     max_retries = 3
     base_delay = 10
     
-    for attempt in range(max_retries):
-        try:
-            response = client.models.generate_content(
-                model='gemini-1.5-flash',
-                contents=prompt,
-                config=types.GenerateContentConfig(
-                    response_mime_type='application/json'
-                )
-            )
-            
-            text_response = response.text
+    # TRY MULTIPLE MODELS FOR STABILITY
+    models_to_try = ['gemini-1.5-flash', 'gemini-1.5-flash-001', 'gemini-1.5-pro']
+    
+    for model_name in models_to_try:
+        for attempt in range(max_retries):
             try:
-                script_data = json.loads(text_response)
-                return script_data
-            except Exception as json_err:
-                with open("bad_response.json", "w", encoding="utf-8") as f:
-                    f.write(text_response)
-                raise json_err
-            
-        except Exception as e:
-            error_str = str(e)
-            # Retry on rate limits OR network/dns errors
-            if "429" in error_str or "RESOURCE_EXHAUSTED" in error_str or "getaddrinfo failed" in error_str or "11001" in error_str:
-                if attempt < max_retries - 1:
-                    wait_time = base_delay * (attempt + 1)
-                    print(f"⚠️ Error transitorio ({e}). Reintentando en {wait_time}s... (Intento {attempt+1}/{max_retries})")
-                    time.sleep(wait_time)
+                response = client.models.generate_content(
+                    model=model_name,
+                    contents=prompt,
+                    config=types.GenerateContentConfig(
+                        response_mime_type='application/json'
+                    )
+                )
+                
+                text_response = response.text
+                try:
+                    script_data = json.loads(text_response)
+                    return script_data
+                except Exception as json_err:
+                    with open("bad_response.json", "w", encoding="utf-8") as f:
+                        f.write(text_response)
+                    raise json_err
+                
+            except Exception as e:
+                error_str = str(e)
+                # If model not found, try next model immediately
+                if "404" in error_str or "NOT_FOUND" in error_str:
+                    print(f"⚠️ Model {model_name} not found. Trying next model...")
+                    break 
+                    
+                # Retry on rate limits OR network/dns errors
+                if "429" in error_str or "RESOURCE_EXHAUSTED" in error_str or "getaddrinfo failed" in error_str:
+                    if attempt < max_retries - 1:
+                        wait_time = base_delay * (attempt + 1)
+                        print(f"⚠️ Quota exceeded for {model_name}. Retrying in {wait_time}s...")
+                        time.sleep(wait_time)
+                    else:
+                        print(f"❌ Quota exhausted for {model_name}. Trying next model...")
+                        break
                 else:
-                    print(f"❌ Error: Fallaron los reintentos tras error: {e}")
-                    return None
-            else:
-                print(f"Error generating script: {e}")
-                return None
+                    print(f"Error with model {model_name}: {e}")
+                    break
+    
+    print("❌ All models failed to generate script.")
+    return None
 
 def generate_viral_hooks(base_topic, trending_list, lang="en"):
     """
@@ -305,18 +317,23 @@ def generate_viral_hooks(base_topic, trending_list, lang="en"):
     }}
     """
     
-    try:
-        response = client.models.generate_content(
-            model='gemini-2.0-flash',
-            contents=prompt,
-            config=types.GenerateContentConfig(
-                response_mime_type='application/json'
+    models_to_try = ['gemini-1.5-flash', 'gemini-1.5-flash-001', 'gemini-1.5-pro']
+    for model_name in models_to_try:
+        try:
+            response = client.models.generate_content(
+                model=model_name,
+                contents=prompt,
+                config=types.GenerateContentConfig(
+                    response_mime_type='application/json'
+                )
             )
-        )
-        return json.loads(response.text).get('hooks', [])
-    except Exception as e:
-        print(f"Error generating hooks: {e}")
-        return []
+            return json.loads(response.text).get('hooks', [])
+        except Exception as e:
+            if "404" in str(e) or "NOT_FOUND" in str(e):
+                continue
+            print(f"Error generating hooks with {model_name}: {e}")
+            continue
+    return []
 
 def generate_creative_topic(style="what_if", lang="en"):
     """
@@ -370,15 +387,20 @@ def generate_creative_topic(style="what_if", lang="en"):
         - OUTPUT: Just the topic string in {lang_name}.
         """
         
-    try:
-        response = client.models.generate_content(
-            model='gemini-2.0-flash',
-            contents=prompt
-        )
-        return response.text.strip().replace('"', '')
-    except Exception as e:
-        print(f"Error generating creative topic: {e}")
-        return None
+    models_to_try = ['gemini-1.5-flash', 'gemini-1.5-flash-001', 'gemini-1.5-pro']
+    for model_name in models_to_try:
+        try:
+            response = client.models.generate_content(
+                model=model_name,
+                contents=prompt
+            )
+            return response.text.strip().replace('"', '')
+        except Exception as e:
+            if "404" in str(e) or "NOT_FOUND" in str(e):
+                continue
+            print(f"Error generating creative topic with {model_name}: {e}")
+            continue
+    return None
 
 if __name__ == "__main__":
     # Test run
