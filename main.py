@@ -309,18 +309,23 @@ def run_batch(count, topic=None, use_trends=False, style="curiosity", log_func=p
                 log_func(f"Error generando audio escena {idx}")
                 continue
             
-            # Whisper fallback only if TTS didn't return timings
+            # Fallback if TTS didn't return timings (skip Whisper in CI - too heavy)
             if not timings:
-                log_func(f"⚠️ No timings from TTS for scene {idx}. Trying Whisper...")
-                try:
-                    from src.aligner import get_word_timings
-                    timings = get_word_timings(audio_path, text_hint=scene['text'])
-                    if timings:
-                        log_func(f"   ✅ Timings recovered with Whisper ({len(timings)} words).")
-                except Exception as ew:
-                    log_func(f"   ❌ Whisper failed: {ew}. Using linear fallback.")
-                    from src.aligner import linear_fallback
-                    timings = linear_fallback(scene['text'].split())
+                log_func(f"⚠️ No timings from TTS for scene {idx}. Using linear fallback...")
+                # Simple linear fallback: distribute words evenly across duration
+                words = scene['text'].split()
+                if words:
+                    audio_path_temp = os.path.join(video_output_dir, f"audio_{idx}.mp3")
+                    try:
+                        from moviepy.editor import AudioFileClip
+                        ac = AudioFileClip(audio_path_temp)
+                        est_dur = ac.duration
+                        ac.close()
+                    except:
+                        est_dur = max(3.0, len(words) * 0.3)
+                    word_dur = est_dur / len(words)
+                    timings = [{'word': w, 'start': i * word_dur, 'end': (i + 1) * word_dur} for i, w in enumerate(words)]
+                    log_func(f"   ✅ Linear fallback: {len(timings)} words over {est_dur:.1f}s")
             
             scene['timings'] = timings
             scene['audio_path'] = audio_path

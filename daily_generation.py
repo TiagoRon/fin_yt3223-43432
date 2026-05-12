@@ -10,9 +10,9 @@ def daily_generation():
     lang = os.environ.get("LANGUAGE", "es")
     
     all_generated_folders = []
-    target_count = 4
+    target_count = int(os.environ.get("VIDEO_COUNT", "2"))  # 2 for CI, can override
     attempts = 0
-    max_total_attempts = 20 # Seguridad para evitar bucles infinitos y dar margen a fallos individuales
+    max_total_attempts = target_count * 4  # Safety cap
     
     print(f"🎯 Objetivo: {target_count} videos.")
 
@@ -33,7 +33,11 @@ def daily_generation():
             
             if res and len(res) > 0:
                 all_generated_folders.extend(res)
-                print(f"✅ Video generado con éxito: {res}")
+                print(f"    ✅ Video generado con éxito: {res}")
+                # Force memory cleanup between videos
+                import gc
+                gc.collect()
+                print(f"    🧹 Memoria liberada. Videos completados: {len(all_generated_folders)}/{target_count}")
             else:
                 print(f"⚠️ El intento {attempts} no produjo resultados. Reintentando...")
                 
