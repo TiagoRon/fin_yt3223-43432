@@ -219,8 +219,9 @@ def generate_script(topic=None, specific_hook=None, style="curiosity", is_test=F
     max_retries = 3
     base_delay = 10
     
-    # TRY MULTIPLE MODELS FOR STABILITY
-    models_to_try = ['gemini-1.5-flash', 'gemini-1.5-flash-001', 'gemini-1.5-pro']
+    # TRY MULTIPLE MODELS FOR STABILITY (Updated May 2026)
+    # gemini-1.5 is retired, gemini-2.0-flash has 0 free quota
+    models_to_try = ['gemini-2.5-flash', 'gemini-2.5-flash-lite', 'gemini-2.0-flash-lite']
     
     for model_name in models_to_try:
         for attempt in range(max_retries):
@@ -317,7 +318,7 @@ def generate_viral_hooks(base_topic, trending_list, lang="en"):
     }}
     """
     
-    models_to_try = ['gemini-1.5-flash', 'gemini-1.5-flash-001', 'gemini-1.5-pro']
+    models_to_try = ['gemini-2.5-flash', 'gemini-2.5-flash-lite', 'gemini-2.0-flash-lite']
     for model_name in models_to_try:
         try:
             response = client.models.generate_content(
@@ -387,7 +388,7 @@ def generate_creative_topic(style="what_if", lang="en"):
         - OUTPUT: Just the topic string in {lang_name}.
         """
         
-    models_to_try = ['gemini-1.5-flash', 'gemini-1.5-flash-001', 'gemini-1.5-pro']
+    models_to_try = ['gemini-2.5-flash', 'gemini-2.5-flash-lite', 'gemini-2.0-flash-lite']
     for model_name in models_to_try:
         try:
             response = client.models.generate_content(
