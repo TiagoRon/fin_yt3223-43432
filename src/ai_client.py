@@ -222,7 +222,7 @@ def generate_script(topic=None, specific_hook=None, style="curiosity", is_test=F
     for attempt in range(max_retries):
         try:
             response = client.models.generate_content(
-                model='gemini-2.0-flash',
+                model='gemini-1.5-flash',
                 contents=prompt,
                 config=types.GenerateContentConfig(
                     response_mime_type='application/json'

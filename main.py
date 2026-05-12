@@ -179,7 +179,7 @@ def run_batch(count, topic=None, use_trends=False, style="curiosity", log_func=p
             
             if hooks:
                 # 3. Pick the best one (Random for now)
-                current_hook = random.choice(hooks)
+                current_hook = random.choice(hooks.get('hooks', []))
                 log_func(f"🪝 {(loc.get('log_hook_selected') if loc else 'Selected Hook:')} '{current_hook}'")
                 current_topic = base_topic # Pass base topic for context if needed, though hook drives it
             else:
@@ -586,13 +586,11 @@ def run_batch(count, topic=None, use_trends=False, style="curiosity", log_func=p
             return
             
         if success:
-            log_func(f"{(loc.get('log_success_vid') if loc else 'SUCCESS! Video saved in:')} {output_file}")
+            log_func(f"✅ SUCCESS! Video saved in: {output_file}")
             success_count += 1
             generated_folders.append(video_output_dir)
-            # History already saved at start of loop
-            pass
         else:
-            log_func(loc.get('log_fail_vid') if loc else "Video creation failed.")
+            log_func(f"❌ Video creation failed for: {safe_title}. Check the logs above for specific errors in assemble_video.")
 
         # --- CLEANUP: Remove intermediate files (ALWAYS RUN) ---
         try:

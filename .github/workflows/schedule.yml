@@ -1,4 +1,4 @@
-name: putita
+name: Daily AutoShorts Generator
 
 on:
   schedule:
@@ -15,30 +15,20 @@ jobs:
       contents: write
 
     steps:
-    - name: Cleanup Old Runs (older than 3 days)
-      env:
-        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      run: |
-        # Calculate date 3 days ago in YYYY-MM-DD format
-        CUTOFF_DATE=$(date -d "3 days ago" +%Y-%m-%d)
-        echo "Deleting runs created before $CUTOFF_DATE"
-        
-        # List and delete runs
-        gh run list --created "<$CUTOFF_DATE" --json databaseId -q '.[].databaseId' | xargs -I {} gh run delete {} || echo "No old runs to delete."
-
     - name: Checkout code
       uses: actions/checkout@v4
 
     - name: Set up Python
       uses: actions/setup-python@v5
       with:
-        python-version: '3.11'
+        python-version: '3.10'
 
     - name: Install system dependencies
       run: |
         sudo apt-get update
         sudo apt-get install -y imagemagick ffmpeg zip
-        sudo sed -i 's/none/read,write/g' /etc/ImageMagick-6/policy.xml
+        # Robustly fix ImageMagick security policy for both v6 and v7
+        find /etc/ImageMagick* -name "policy.xml" -exec sudo sed -i 's/none/read,write/g' {} +
 
     - name: Install Python dependencies
       run: |
@@ -51,6 +41,7 @@ jobs:
         PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY }}
         WATERMARK_TEXT: "@AIShortsGenerator"
         LANGUAGE: "es"
+        IMAGEMAGICK_BINARY: /usr/bin/convert
       run: python daily_generation.py
 
     - name: Commit & Push History
