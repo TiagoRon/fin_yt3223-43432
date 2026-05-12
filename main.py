@@ -56,7 +56,7 @@ def run_batch(count, topic=None, use_trends=False, style="curiosity", log_func=p
     success_count = 0
     generated_folders = []
     total_attempts = 0
-    max_total_attempts = count * 3 # Allow up to 3 tries per requested video
+    max_total_attempts = count * 5 # Allow up to 5 tries per requested video
 
     while success_count < count and total_attempts < max_total_attempts:
         total_attempts += 1

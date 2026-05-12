@@ -12,7 +12,7 @@ def daily_generation():
     all_generated_folders = []
     target_count = 4
     attempts = 0
-    max_total_attempts = 10 # Seguridad para evitar bucles infinitos
+    max_total_attempts = 20 # Seguridad para evitar bucles infinitos y dar margen a fallos individuales
     
     print(f"🎯 Objetivo: {target_count} videos.")
 
