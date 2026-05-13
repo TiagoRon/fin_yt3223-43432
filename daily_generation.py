@@ -10,9 +10,9 @@ def daily_generation():
     lang = os.environ.get("LANGUAGE", "es")
     
     all_generated_folders = []
-    target_count = int(os.environ.get("VIDEO_COUNT", "2"))  # 2 for CI, can override
+    target_count = 4
     attempts = 0
-    max_total_attempts = target_count * 4  # Safety cap
+    max_total_attempts = 10 # Seguridad para evitar bucles infinitos
     
     print(f"🎯 Objetivo: {target_count} videos.")
 
@@ -25,28 +25,19 @@ def daily_generation():
         print(f"\n--- [Intento {attempts}] Generando Video {len(all_generated_folders) + 1}/{target_count} (Estilo: {current_style}) ---")
         
         try:
-            g_key = os.environ.get("GOOGLE_API_KEY")
-            p_key = os.environ.get("PEXELS_API_KEY")
-            print(f"    🔍 Debug: GOOGLE_API_KEY={'PRESENTE' if g_key else 'FALTA'} | PEXELS_API_KEY={'PRESENTE' if p_key else 'FALTA'}")
-            
+            # Intentamos generar 1 video con el estilo actual
             res = run_batch(count=1, style=current_style, watermark_text=watermark, lang=lang)
             
             if res and len(res) > 0:
                 all_generated_folders.extend(res)
-                print(f"    ✅ Video generado con éxito: {res}")
-                # Force memory cleanup between videos
-                import gc
-                gc.collect()
-                print(f"    🧹 Memoria liberada. Videos completados: {len(all_generated_folders)}/{target_count}")
+                print(f"✅ Video generado con éxito: {res}")
             else:
                 print(f"⚠️ El intento {attempts} no produjo resultados. Reintentando...")
                 
         except Exception as e:
-            print(f"    ❌ Error excepcional en el intento {attempts}: {e}")
-            import traceback
-            traceback.print_exc()
+            print(f"❌ Error en el intento {attempts}: {e}")
             import time
-            time.sleep(5)
+            time.sleep(2) # Breve espera antes de reintentar
 
     if len(all_generated_folders) < target_count:
         print(f"\n⚠️ Advertencia: Solo se pudieron generar {len(all_generated_folders)} videos tras {attempts} intentos.")

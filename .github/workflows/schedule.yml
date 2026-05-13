@@ -1,0 +1,84 @@
+name: putita
+
+on:
+  schedule:
+    - cron: '0 10 * * *' # 10:00 UTC = 7:00 AM Argentina
+  workflow_dispatch:
+
+jobs:
+  automate:
+    name: Generate Daily Videos
+    runs-on: ubuntu-latest
+    
+    permissions:
+      actions: write
+      contents: write
+
+    steps:
+    - name: Cleanup Old Runs (older than 3 days)
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        # Calculate date 3 days ago in YYYY-MM-DD format
+        CUTOFF_DATE=$(date -d "3 days ago" +%Y-%m-%d)
+        echo "Deleting runs created before $CUTOFF_DATE"
+        
+        # List and delete runs
+        gh run list --created "<$CUTOFF_DATE" --json databaseId -q '.[].databaseId' | xargs -I {} gh run delete {} || echo "No old runs to delete."
+
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+
+    - name: Install system dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y imagemagick ffmpeg zip
+        sudo sed -i 's/none/read,write/g' /etc/ImageMagick-6/policy.xml
+
+    - name: Install Python dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+
+    - name: Run Daily Generation
+      env:
+        GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
+        PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY }}
+        WATERMARK_TEXT: "@AIShortsGenerator"
+        LANGUAGE: "es"
+      run: python daily_generation.py
+
+    - name: Commit & Push History
+      continue-on-error: true
+      run: |
+        git config user.name "AutoShorts Bot"
+        git config user.email "actions@github.com"
+        git pull origin main --rebase || echo "No changes to pull"
+        git add video_history.json
+        git commit -m "Update video history [skip ci]" || echo "No changes to commit"
+        git push origin main || echo "Failed to push history"
+
+    - name: Zip All Videos
+      if: always()
+      run: |
+        if [ -d "output" ] && [ "$(ls -A output)" ]; then
+          cd output
+          zip -r ../daily_videos.zip .
+          cd ..
+        else
+          echo "No files found in output directory to zip."
+        fi
+
+    - name: Upload Artifacts
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: DAILY_VIDEOS
+        path: daily_videos.zip
+        if-no-files-found: warn # Esto evita que el workflow falle si no hay videos
+        retention-days: 3

@@ -23,3 +23,4 @@ stable-ts
 curl-cffi
 selenium
 webdriver-manager
+patool

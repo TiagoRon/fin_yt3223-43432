@@ -1583,15 +1583,15 @@ def assemble_video(scenes, music_dir, output_file, title_text=None, mood="myster
 
         custom_logger = CancelableLogger(is_cancelled, progress_callback)
 
-        # OPTIMIZED WRITE: FAST PRESET, 2 THREADS, 5000k BITRATE (plenty for 720p)
+        # OPTIMIZED WRITE: FAST PRESET, 4 THREADS, 5000k BITRATE (plenty for 720p)
         final_video.write_videofile(
             output_file, 
             fps=30, 
             codec='libx264', 
             audio_codec='aac', 
             bitrate="5000k", 
-            preset='ultrafast',   # OPTIMIZATION: Faster encoding for CI
-            threads=1,            # OPTIMIZATION: 1 thread to save memory on runner
+            preset='fast',        # OPTIMIZATION: Great speed/quality trade-off
+            threads=4,            # OPTIMIZATION: 4 threads for faster encoding
             logger=custom_logger
         )
         # Cleanup Resources

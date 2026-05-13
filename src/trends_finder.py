@@ -32,7 +32,7 @@ def get_trending_topics(count=5, geo='AR'):
     try:
         # Use Search Grounding to get real-time info
         response = client.models.generate_content(
-            model='gemini-2.0-flash',
+            model='gemini-2.5-flash',
             contents=prompt,
             config=types.GenerateContentConfig(
                 tools=[types.Tool(google_search=types.GoogleSearch())]

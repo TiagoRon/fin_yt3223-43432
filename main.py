@@ -56,7 +56,7 @@ def run_batch(count, topic=None, use_trends=False, style="curiosity", log_func=p
     success_count = 0
     generated_folders = []
     total_attempts = 0
-    max_total_attempts = count * 5 # Allow up to 5 tries per requested video
+    max_total_attempts = count * 3 # Allow up to 3 tries per requested video
 
     while success_count < count and total_attempts < max_total_attempts:
         total_attempts += 1
@@ -179,7 +179,7 @@ def run_batch(count, topic=None, use_trends=False, style="curiosity", log_func=p
             
             if hooks:
                 # 3. Pick the best one (Random for now)
-                current_hook = random.choice(hooks.get('hooks', []))
+                current_hook = random.choice(hooks)
                 log_func(f"🪝 {(loc.get('log_hook_selected') if loc else 'Selected Hook:')} '{current_hook}'")
                 current_topic = base_topic # Pass base topic for context if needed, though hook drives it
             else:
@@ -309,41 +309,16 @@ def run_batch(count, topic=None, use_trends=False, style="curiosity", log_func=p
                 log_func(f"Error generando audio escena {idx}")
                 continue
             
-            # Restore Whisper for perfect synchronization (using tiny model for speed/memory)
+            # Whisper fallback only if TTS didn't return timings
             if not timings:
-                log_func(f"🔍 Sincronizando audio con Whisper (modelo tiny)...")
+                log_func(f"⚠️ No timings from TTS for scene {idx}. Trying Whisper...")
                 try:
-                    import whisper
-                    import torch
-                    # Force CPU and tiny model to avoid OOM
-                    model = whisper.load_model("tiny", device="cpu")
-                    result_w = model.transcribe(audio_path, verbose=False, language=lang)
-                    
-                    timings = []
-                    for segment in result_w.get('segments', []):
-                        for word_data in segment.get('words', []):
-                             timings.append({
-                                 'word': word_data['word'].strip(),
-                                 'start': word_data['start'],
-                                 'end': word_data['end']
-                             })
-                    
-                    if not timings:
-                        # Fallback for old whisper versions without word_timestamps
-                        for segment in result_w.get('segments', []):
-                            words = segment['text'].split()
-                            duration = segment['end'] - segment['start']
-                            word_dur = duration / max(1, len(words))
-                            for i, w in enumerate(words):
-                                timings.append({
-                                    'word': w,
-                                    'start': segment['start'] + (i * word_dur),
-                                    'end': segment['start'] + ((i + 1) * word_dur)
-                                })
-                    
-                    log_func(f"   ✅ Sincronización completa: {len(timings)} palabras.")
+                    from src.aligner import get_word_timings
+                    timings = get_word_timings(audio_path, text_hint=scene['text'])
+                    if timings:
+                        log_func(f"   ✅ Timings recovered with Whisper ({len(timings)} words).")
                 except Exception as ew:
-                    log_func(f"   ❌ Error en Whisper: {ew}. Usando respaldo básico.")
+                    log_func(f"   ❌ Whisper failed: {ew}. Using linear fallback.")
                     from src.aligner import linear_fallback
                     timings = linear_fallback(scene['text'].split())
             
@@ -611,11 +586,13 @@ def run_batch(count, topic=None, use_trends=False, style="curiosity", log_func=p
             return
             
         if success:
-            log_func(f"✅ SUCCESS! Video saved in: {output_file}")
+            log_func(f"{(loc.get('log_success_vid') if loc else 'SUCCESS! Video saved in:')} {output_file}")
             success_count += 1
             generated_folders.append(video_output_dir)
+            # History already saved at start of loop
+            pass
         else:
-            log_func(f"❌ Video creation failed for: {safe_title}. Check the logs above for specific errors in assemble_video.")
+            log_func(loc.get('log_fail_vid') if loc else "Video creation failed.")
 
         # --- CLEANUP: Remove intermediate files (ALWAYS RUN) ---
         try:
