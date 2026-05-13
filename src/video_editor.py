@@ -1591,7 +1591,7 @@ def assemble_video(scenes, music_dir, output_file, title_text=None, mood="myster
             audio_codec='aac', 
             bitrate="5000k", 
             preset='ultrafast',   # OPTIMIZATION: Faster encoding for CI
-            threads=2,            # OPTIMIZATION: 2 threads to save memory on runner
+            threads=1,            # OPTIMIZATION: 1 thread to save memory on runner
             logger=custom_logger
         )
         # Cleanup Resources

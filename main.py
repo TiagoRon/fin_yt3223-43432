@@ -309,23 +309,43 @@ def run_batch(count, topic=None, use_trends=False, style="curiosity", log_func=p
                 log_func(f"Error generando audio escena {idx}")
                 continue
             
-            # Fallback if TTS didn't return timings (skip Whisper in CI - too heavy)
+            # Restore Whisper for perfect synchronization (using tiny model for speed/memory)
             if not timings:
-                log_func(f"⚠️ No timings from TTS for scene {idx}. Using linear fallback...")
-                # Simple linear fallback: distribute words evenly across duration
-                words = scene['text'].split()
-                if words:
-                    audio_path_temp = os.path.join(video_output_dir, f"audio_{idx}.mp3")
-                    try:
-                        from moviepy.editor import AudioFileClip
-                        ac = AudioFileClip(audio_path_temp)
-                        est_dur = ac.duration
-                        ac.close()
-                    except:
-                        est_dur = max(3.0, len(words) * 0.3)
-                    word_dur = est_dur / len(words)
-                    timings = [{'word': w, 'start': i * word_dur, 'end': (i + 1) * word_dur} for i, w in enumerate(words)]
-                    log_func(f"   ✅ Linear fallback: {len(timings)} words over {est_dur:.1f}s")
+                log_func(f"🔍 Sincronizando audio con Whisper (modelo tiny)...")
+                try:
+                    import whisper
+                    import torch
+                    # Force CPU and tiny model to avoid OOM
+                    model = whisper.load_model("tiny", device="cpu")
+                    result_w = model.transcribe(audio_path, verbose=False, language=lang)
+                    
+                    timings = []
+                    for segment in result_w.get('segments', []):
+                        for word_data in segment.get('words', []):
+                             timings.append({
+                                 'word': word_data['word'].strip(),
+                                 'start': word_data['start'],
+                                 'end': word_data['end']
+                             })
+                    
+                    if not timings:
+                        # Fallback for old whisper versions without word_timestamps
+                        for segment in result_w.get('segments', []):
+                            words = segment['text'].split()
+                            duration = segment['end'] - segment['start']
+                            word_dur = duration / max(1, len(words))
+                            for i, w in enumerate(words):
+                                timings.append({
+                                    'word': w,
+                                    'start': segment['start'] + (i * word_dur),
+                                    'end': segment['start'] + ((i + 1) * word_dur)
+                                })
+                    
+                    log_func(f"   ✅ Sincronización completa: {len(timings)} palabras.")
+                except Exception as ew:
+                    log_func(f"   ❌ Error en Whisper: {ew}. Usando respaldo básico.")
+                    from src.aligner import linear_fallback
+                    timings = linear_fallback(scene['text'].split())
             
             scene['timings'] = timings
             scene['audio_path'] = audio_path
