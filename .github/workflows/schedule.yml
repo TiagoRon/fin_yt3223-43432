@@ -65,11 +65,16 @@ jobs:
 
     - name: Zip All Videos
       if: always()
+      id: zip_step
       run: |
+        # Unique name per run: batch_videos_YYYY-MM-DD_HH-MM.zip
+        FILE_NAME="batch_videos_$(date +'%Y-%m-%d_%H-%M').zip"
+        echo "filename=$FILE_NAME" >> $GITHUB_OUTPUT
         if [ -d "output" ] && [ "$(ls -A output)" ]; then
           cd output
-          zip -r ../daily_videos.zip .
+          zip -r "../$FILE_NAME" .
           cd ..
+          echo "✅ Zipped $(ls output | wc -l) files into $FILE_NAME"
         else
           echo "No files found in output directory to zip."
         fi
@@ -78,7 +83,7 @@ jobs:
       if: always()
       uses: actions/upload-artifact@v4
       with:
-        name: DAILY_VIDEOS
-        path: daily_videos.zip
-        if-no-files-found: warn # Esto evita que el workflow falle si no hay videos
+        name: ${{ steps.zip_step.outputs.filename }}
+        path: ${{ steps.zip_step.outputs.filename }}
+        if-no-files-found: warn
         retention-days: 3
