@@ -25,10 +25,10 @@ def generate_script(topic=None, specific_hook=None, style="curiosity", is_test=F
              topic_instruction = "TOPIC: Choose a RANDOM 'What If' scenario (e.g. What if the moon disappeared? What if we never slept?)."
              
         system_instruction = """
-        STYLE: "WHAT IF" SCENARIO.
-        - Hook: MUST start with "¿Qué pasaría si..." or "Imagina si...".
-        - Body: logical but dramatic consequences based on REAL physics, REAL science, or REAL historical data. Do NOT invent fictional characters.
-        - Climax: existential or mind-blowing conclusion.
+        STYLE: EXTREME "WHAT IF" SCENARIO / MIND-BLOWING FICTIONALIZED REALITY.
+        - Hook: MUST start with an aggressive, curiosity-inducing hook like "¿Y si te dijera que...?", "¿Qué pasaría si...", or "Imagina despertar y que...". Break the viewer's expectations immediately.
+        - Body: Focus on intense, dramatic, and terrifying/fascinating consequences. Use extreme storytelling with high stakes. Make it sound like an apocalyptic movie trailer or a mind-bending sci-fi thriller, but base the core mechanics on REAL physics, REAL science, or REAL historical data. No boring explanations, focus on the psychological and global impact!
+        - Climax: Leave them with an existential dread or a completely mind-blowing paradigm shift that forces them to rewatch or comment.
         """
     elif style == "top_3":
          if topic:
@@ -37,18 +37,18 @@ def generate_script(topic=None, specific_hook=None, style="curiosity", is_test=F
              topic_instruction = "TOPIC: Choose a RANDOM 'Top 3' list (e.g. Top 3 Most Dangerous Roads)."
          
          system_instruction = """
-         STYLE: "TOP 3 RANKING" (Countdown).
+         STYLE: VIRAL "TOP 3 RANKING" (Countdown).
          STRUCTURE (MANDATORY):
-         - HOOK (2-3 scenes): Quick intro of the topic. NO vague hype. State WHY this topic is interesting with a concrete hook fact.
+         - HOOK (2-3 scenes): High-tension, hyper-engaging intro. State a mind-blowing or controversial fact that proves WHY this topic is insane. NO vague hype.
          - POSITION 3 (3-4 scenes): The narration script MUST EXACTLY start with 'En el Top 3: [REAL EXACT NAME]' or 'En el Puesto 3: [REAL EXACT NAME]'. Do NOT skip this detail. Then give:
-             * The year it was released/happened.
-             * Focus 100% on the PLOT, the CHARACTERS, or the CONTENT itself. Do NOT talk extensively about the creators, directors, or real-world staff.
-             * A concrete achievement: box office number, award won, record broken, or historical milestone.
-             * ONE specific memorable detail (a scene, a line, a character, an anecdote) that makes it stand out.
-         - POSITION 2 (3-4 scenes): Same structure as Position 3. MUST start narration with 'En el Puesto 2:'.
-         - POSITION 1 (3-4 scenes): Same structure. MUST start narration with 'En el Puesto 1:' plus WHY it is the undisputed #1.
-         - CONCLUSION (1 scene): One strong, concrete closing line. NO filler like 'these are amazing'. Give a final thought-provoking fact.
-         TONE: Informative, direct, slightly enthusiastic. Imagine a knowledgeable friend explaining WHY each item matters.
+             * A shocking fact or dark secret about this item immediately.
+             * Focus 100% on the mind-blowing PLOT, the CHARACTERS, or the CONTENT itself.
+             * Use visceral language and high-energy pacing. Keep them glued.
+             * ONE specific memorable, crazy detail (a bizarre scene, a shocking line, a wild anecdote) that makes it stand out.
+         - POSITION 2 (3-4 scenes): Same structure as Position 3. MUST start narration with 'En el Puesto 2:'. Escalate the tension. Make this one sound even more incredible.
+         - POSITION 1 (3-4 scenes): Same structure. MUST start narration with 'En el Puesto 1:'. This is the final boss. Explain WHY it is the undisputed #1 using the most shocking and unbelievable verifiable facts.
+         - CONCLUSION (1 scene): One strong, concrete, mind-bending closing line that makes them want to argue in the comments or share the video. NO filler like 'these are amazing'.
+         TONE: Hyper-enthusiastic, suspenseful, like you're revealing forbidden knowledge. Imagine a knowledgeable friend explaining WHY each item matters.
          CRITICAL: Every scene must contain at least ONE specific verifiable datum (year, name, number, award, country). ZERO vague sentences.
          DO NOT USE the Perfect Loop rule. The conclusion must be a proper ending, not repeating the intro.
          """
@@ -325,19 +325,20 @@ def generate_creative_topic(style="what_if", lang="en"):
     
     if style == "what_if":
         prompt = f"""
-        TASK: Invent a unique, mind-blowing 'What If' scenario for a YouTube Short.
-        - Must be speculative, scientific, or philosophical.
-        - profound or paradoxical.
-        - EXAMPLES: "What if shadows were alive?", "What if silence killed you?", "What if dreams were shared reality?"
+        TASK: Invent an incredibly viral, mind-blowing 'What If' scenario for a YouTube Short.
+        - Must be deeply psychological, existentially terrifying, or radically perception-altering.
+        - Frame it as a profound, dangerous, or paradoxical thought experiment that people CANNOT scroll past.
+        - EXAMPLES: "What if your reflection was a different timeline?", "What if the sun never set again?", "What if human memory was wiped every 24 hours?"
         - OUTPUT: Just the straight topic string in {lang_name}. No quotes.
-        - DO NOT output generic ones like "zombies" or "aliens". Be creative.
+        - DO NOT output generic ones like "zombies" or "aliens". Be extremely creative and unsettling.
         """
     elif style == "top_3":
-        prompt = """
-        TASK: Invent a unique "Top 3" list topic for a video.
-        - Format: "Top 3 [Adjective] [Subject]"
-        - Examples: "Top 3 lugares prohibidos", "Top 3 animales inmortales", "Top 3 sonidos más fuertes".
-        - OUTPUT: Just the topic string in {lang_name}.
+        prompt = f"""
+        TASK: Invent a highly clickable, viral "Top 3" list topic for a video.
+        - Format: "Top 3 [Extreme/Mysterious Adjective] [Subject]"
+        - Focus on danger, mystery, forbidden knowledge, or mind-blowing anomalies.
+        - Examples: "Top 3 lugares que el gobierno oculta", "Top 3 criaturas marinas más aterradoras", "Top 3 misterios sin resolver del espacio".
+        - OUTPUT: Just the topic string in {lang_name}. No quotes.
         """
     elif style == "dark_facts":
         prompt = """
