@@ -2,7 +2,7 @@ name: putita
 
 on:
   schedule:
-    - cron: '0 8,10 * * *' # 08:00 and 10:00 UTC
+    - cron: '0 8,9 * * *' # 08:00 and 09:00 UTC
   workflow_dispatch:
 
 jobs:
