@@ -214,7 +214,7 @@ def generate_script(topic=None, specific_hook=None, style="curiosity", is_test=F
     
     # Lista de modelos gratuitos de Gemini como fallback en caso de agotar la cuota (429)
     models_to_try = [
-        'gemini-2.5-flash-lite',
+        'gemini-2.0-flash-lite',
         'gemini-2.0-flash',
         'gemini-1.5-flash',
         'gemini-1.5-pro'
@@ -247,8 +247,7 @@ def generate_script(topic=None, specific_hook=None, style="curiosity", is_test=F
                 
             except Exception as e:
                 error_str = str(e)
-                # Retry on rate limits OR network/dns errors
-                if "429" in error_str or "RESOURCE_EXHAUSTED" in error_str:
+                if "429" in error_str or "RESOURCE_EXHAUSTED" in error_str or "exceeded your current quota" in error_str:
                     print(f"⚠️ Cuota agotada para {current_model} ({e}).")
                     break # Salimos del bucle de intentos para pasar al siguiente modelo
                 elif "getaddrinfo failed" in error_str or "11001" in error_str or "503" in error_str:
@@ -263,6 +262,24 @@ def generate_script(topic=None, specific_hook=None, style="curiosity", is_test=F
                     print(f"Error inesperado generando script con {current_model}: {e}")
                     break # Pasar al siguiente modelo si es otro error
                     
+    # FALLBACK FINAL: g4f (GPT4Free)
+    print("⚠️ Todos los modelos de Gemini fallaron o están sin cuota. Intentando con g4f como fallback gratuito extremo...")
+    try:
+        from g4f.client import Client as G4FClient
+        g4f_client = G4FClient()
+        g4f_response = g4f_client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[{"role": "user", "content": prompt}]
+        )
+        text_response = g4f_response.choices[0].message.content
+        if text_response.startswith("```json"):
+            text_response = text_response.replace("```json\n", "").replace("\n```", "").replace("```", "")
+        script_data = json.loads(text_response)
+        print("✅ Generado exitosamente usando g4f (GPT4Free).")
+        return script_data
+    except Exception as e:
+        print(f"❌ Error crítico también en g4f: {e}")
+    
     print("❌ Error crítico: Todos los modelos de fallback fallaron. No se pudo generar el script.")
     return None
 
@@ -319,7 +336,7 @@ def generate_viral_hooks(base_topic, trending_list, lang="en"):
     """
     
     try:
-        models_to_try = ['gemini-2.5-flash-lite', 'gemini-2.0-flash', 'gemini-1.5-flash', 'gemini-1.5-pro']
+        models_to_try = ['gemini-2.0-flash-lite', 'gemini-2.0-flash', 'gemini-1.5-flash', 'gemini-1.5-pro']
         for current_model in models_to_try:
             try:
                 response = client.models.generate_content(
@@ -331,9 +348,26 @@ def generate_viral_hooks(base_topic, trending_list, lang="en"):
                 )
                 return json.loads(response.text).get('hooks', [])
             except Exception as e:
-                if "429" in str(e) or "RESOURCE_EXHAUSTED" in str(e):
+                if "429" in str(e) or "RESOURCE_EXHAUSTED" in str(e) or "exceeded your current quota" in str(e):
                     continue
                 raise e
+                
+        # FALLBACK FINAL: g4f
+        print("⚠️ Todos los modelos de Gemini fallaron para hooks. Intentando g4f...")
+        try:
+            from g4f.client import Client as G4FClient
+            g4f_client = G4FClient()
+            g4f_response = g4f_client.chat.completions.create(
+                model="gpt-4o-mini",
+                messages=[{"role": "user", "content": prompt}]
+            )
+            text_response = g4f_response.choices[0].message.content
+            if text_response.startswith("```json"):
+                text_response = text_response.replace("```json\n", "").replace("\n```", "").replace("```", "")
+            return json.loads(text_response).get('hooks', [])
+        except Exception as e:
+            print(f"❌ Error crítico en hooks con g4f: {e}")
+            
         return []
     except Exception as e:
         print(f"Error generating hooks: {e}")
@@ -393,7 +427,7 @@ def generate_creative_topic(style="what_if", lang="en"):
         """
         
     try:
-        models_to_try = ['gemini-2.5-flash-lite', 'gemini-2.0-flash', 'gemini-1.5-flash', 'gemini-1.5-pro']
+        models_to_try = ['gemini-2.0-flash-lite', 'gemini-2.0-flash', 'gemini-1.5-flash', 'gemini-1.5-pro']
         for current_model in models_to_try:
             try:
                 response = client.models.generate_content(
@@ -402,9 +436,23 @@ def generate_creative_topic(style="what_if", lang="en"):
                 )
                 return response.text.strip().replace('"', '')
             except Exception as e:
-                if "429" in str(e) or "RESOURCE_EXHAUSTED" in str(e):
+                if "429" in str(e) or "RESOURCE_EXHAUSTED" in str(e) or "exceeded your current quota" in str(e):
                     continue
                 raise e
+                
+        # FALLBACK FINAL: g4f
+        print("⚠️ Todos los modelos de Gemini fallaron para topic. Intentando g4f...")
+        try:
+            from g4f.client import Client as G4FClient
+            g4f_client = G4FClient()
+            g4f_response = g4f_client.chat.completions.create(
+                model="gpt-4o-mini",
+                messages=[{"role": "user", "content": prompt}]
+            )
+            return g4f_response.choices[0].message.content.strip().replace('"', '')
+        except Exception as e:
+            print(f"❌ Error crítico en topic con g4f: {e}")
+            
         return None
     except Exception as e:
         print(f"Error generating creative topic: {e}")
