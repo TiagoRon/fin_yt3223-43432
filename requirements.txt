@@ -24,3 +24,5 @@ curl-cffi
 selenium
 webdriver-manager
 patool
+
+g4f
