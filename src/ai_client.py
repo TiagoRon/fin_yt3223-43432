@@ -215,6 +215,9 @@ def generate_script(topic=None, specific_hook=None, style="curiosity", is_test=F
     # Lista de modelos gratuitos de Gemini como fallback en caso de agotar la cuota (429)
     models_to_try = [
         'gemini-2.0-flash-lite',
+        'gemini-3.1-flash-lite',
+        'gemini-3.5-flash',
+        'gemini-3.1-flash',
         'gemini-2.0-flash',
         'gemini-1.5-flash',
         'gemini-1.5-pro'
@@ -336,7 +339,15 @@ def generate_viral_hooks(base_topic, trending_list, lang="en"):
     """
     
     try:
-        models_to_try = ['gemini-2.0-flash-lite', 'gemini-2.0-flash', 'gemini-1.5-flash', 'gemini-1.5-pro']
+        models_to_try = [
+            'gemini-2.0-flash-lite',
+            'gemini-3.1-flash-lite',
+            'gemini-3.5-flash',
+            'gemini-3.1-flash',
+            'gemini-2.0-flash',
+            'gemini-1.5-flash',
+            'gemini-1.5-pro'
+        ]
         for current_model in models_to_try:
             try:
                 response = client.models.generate_content(
@@ -427,7 +438,15 @@ def generate_creative_topic(style="what_if", lang="en"):
         """
         
     try:
-        models_to_try = ['gemini-2.0-flash-lite', 'gemini-2.0-flash', 'gemini-1.5-flash', 'gemini-1.5-pro']
+        models_to_try = [
+            'gemini-2.0-flash-lite',
+            'gemini-3.1-flash-lite',
+            'gemini-3.5-flash',
+            'gemini-3.1-flash',
+            'gemini-2.0-flash',
+            'gemini-1.5-flash',
+            'gemini-1.5-pro'
+        ]
         for current_model in models_to_try:
             try:
                 response = client.models.generate_content(
