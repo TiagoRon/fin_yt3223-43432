@@ -212,42 +212,59 @@ def generate_script(topic=None, specific_hook=None, style="curiosity", is_test=F
 
     import time
     
-    max_retries = 3
-    base_delay = 10
+    # Lista de modelos gratuitos de Gemini como fallback en caso de agotar la cuota (429)
+    models_to_try = [
+        'gemini-2.5-flash-lite',
+        'gemini-2.0-flash',
+        'gemini-1.5-flash',
+        'gemini-1.5-pro'
+    ]
     
-    for attempt in range(max_retries):
-        try:
-            response = client.models.generate_content(
-                model='gemini-2.5-flash-lite',
-                contents=prompt,
-                config=types.GenerateContentConfig(
-                    response_mime_type='application/json'
-                )
-            )
-            
-            text_response = response.text
+    max_retries_per_model = 2
+    base_delay = 5
+    
+    for current_model in models_to_try:
+        print(f"🤖 Intentando con el modelo: {current_model}...")
+        
+        for attempt in range(max_retries_per_model):
             try:
-                script_data = json.loads(text_response)
-                return script_data
-            except Exception as json_err:
-                with open("bad_response.json", "w", encoding="utf-8") as f:
-                    f.write(text_response)
-                raise json_err
-            
-        except Exception as e:
-            error_str = str(e)
-            # Retry on rate limits OR network/dns errors
-            if "429" in error_str or "RESOURCE_EXHAUSTED" in error_str or "getaddrinfo failed" in error_str or "11001" in error_str:
-                if attempt < max_retries - 1:
-                    wait_time = base_delay * (attempt + 1)
-                    print(f"⚠️ Error transitorio ({e}). Reintentando en {wait_time}s... (Intento {attempt+1}/{max_retries})")
-                    time.sleep(wait_time)
+                response = client.models.generate_content(
+                    model=current_model,
+                    contents=prompt,
+                    config=types.GenerateContentConfig(
+                        response_mime_type='application/json'
+                    )
+                )
+                
+                text_response = response.text
+                try:
+                    script_data = json.loads(text_response)
+                    return script_data
+                except Exception as json_err:
+                    with open("bad_response.json", "w", encoding="utf-8") as f:
+                        f.write(text_response)
+                    raise json_err
+                
+            except Exception as e:
+                error_str = str(e)
+                # Retry on rate limits OR network/dns errors
+                if "429" in error_str or "RESOURCE_EXHAUSTED" in error_str:
+                    print(f"⚠️ Cuota agotada para {current_model} ({e}).")
+                    break # Salimos del bucle de intentos para pasar al siguiente modelo
+                elif "getaddrinfo failed" in error_str or "11001" in error_str or "503" in error_str:
+                    if attempt < max_retries_per_model - 1:
+                        wait_time = base_delay * (attempt + 1)
+                        print(f"⚠️ Error de red ({e}). Reintentando {current_model} en {wait_time}s... (Intento {attempt+1}/{max_retries_per_model})")
+                        time.sleep(wait_time)
+                    else:
+                        print(f"❌ Error: Fallaron los reintentos de red para {current_model}")
+                        break
                 else:
-                    print(f"❌ Error: Fallaron los reintentos tras error: {e}")
-                    return None
-            else:
-                print(f"Error generating script: {e}")
-                return None
+                    print(f"Error inesperado generando script con {current_model}: {e}")
+                    break # Pasar al siguiente modelo si es otro error
+                    
+    print("❌ Error crítico: Todos los modelos de fallback fallaron. No se pudo generar el script.")
+    return None
 
 def generate_viral_hooks(base_topic, trending_list, lang="en"):
     """
@@ -302,14 +319,22 @@ def generate_viral_hooks(base_topic, trending_list, lang="en"):
     """
     
     try:
-        response = client.models.generate_content(
-            model='gemini-2.5-flash-lite',
-            contents=prompt,
-            config=types.GenerateContentConfig(
-                response_mime_type='application/json'
-            )
-        )
-        return json.loads(response.text).get('hooks', [])
+        models_to_try = ['gemini-2.5-flash-lite', 'gemini-2.0-flash', 'gemini-1.5-flash', 'gemini-1.5-pro']
+        for current_model in models_to_try:
+            try:
+                response = client.models.generate_content(
+                    model=current_model,
+                    contents=prompt,
+                    config=types.GenerateContentConfig(
+                        response_mime_type='application/json'
+                    )
+                )
+                return json.loads(response.text).get('hooks', [])
+            except Exception as e:
+                if "429" in str(e) or "RESOURCE_EXHAUSTED" in str(e):
+                    continue
+                raise e
+        return []
     except Exception as e:
         print(f"Error generating hooks: {e}")
         return []
@@ -368,11 +393,19 @@ def generate_creative_topic(style="what_if", lang="en"):
         """
         
     try:
-        response = client.models.generate_content(
-            model='gemini-2.5-flash-lite',
-            contents=prompt
-        )
-        return response.text.strip().replace('"', '')
+        models_to_try = ['gemini-2.5-flash-lite', 'gemini-2.0-flash', 'gemini-1.5-flash', 'gemini-1.5-pro']
+        for current_model in models_to_try:
+            try:
+                response = client.models.generate_content(
+                    model=current_model,
+                    contents=prompt
+                )
+                return response.text.strip().replace('"', '')
+            except Exception as e:
+                if "429" in str(e) or "RESOURCE_EXHAUSTED" in str(e):
+                    continue
+                raise e
+        return None
     except Exception as e:
         print(f"Error generating creative topic: {e}")
         return None
