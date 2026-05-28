@@ -2,8 +2,8 @@ name: putita
 
 on:
   schedule:
-    - cron: '11 4 * * *'  # 04:11 UTC (01:11 AM ARG - Tanda 1)
-    - cron: '11 12 * * *' # 12:11 UTC (09:11 AM ARG - Tanda 2, 8 horas despues)
+    - cron: '11 1 * * *'  # 04:11 UTC (01:11 AM ARG - Tanda 1)
+    - cron: '11 9 * * *' # 12:11 UTC (09:11 AM ARG - Tanda 2, 8 horas despues)
   workflow_dispatch:
 
 jobs:
