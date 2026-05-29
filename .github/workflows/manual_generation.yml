@@ -88,8 +88,7 @@ jobs:
           echo "Cookies saved and verified via Unix tools."
         fi
 
-    - name: Run Cloud Video Generation (With Auto-Retry)
-      uses: nick-fields/retry@v3
+    - name: Run Cloud Video Generation
       env:
         GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
         PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY }}
@@ -98,10 +97,7 @@ jobs:
         VIDEO_TOPIC: ${{ github.event.inputs.video_topic }}
         WATERMARK_TEXT: ${{ github.event.inputs.watermark_text }}
         LANGUAGE: ${{ github.event.inputs.language }}
-      with:
-        timeout_minutes: 60
-        max_attempts: 3
-        command: python cloud_main.py
+      run: python cloud_main.py
 
     - name: Commit & Push History (Prevent Duplicates)
       continue-on-error: true

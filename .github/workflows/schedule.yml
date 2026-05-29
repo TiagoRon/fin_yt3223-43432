@@ -58,17 +58,14 @@ jobs:
         sudo swapon /swapfile
         free -h
 
-    - name: Run Daily Generation (With Auto-Retry)
-      uses: nick-fields/retry@v3
+    - name: Run Daily Generation
       env:
         GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
         PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY }}
         WATERMARK_TEXT: "@AIShortsGenerator"
         LANGUAGE: "es"
-      with:
-        timeout_minutes: 60
-        max_attempts: 3
-        command: python daily_generation.py
+        VIDEO_COUNT: "3"
+      run: python daily_generation.py
 
     - name: Commit & Push History
       continue-on-error: true

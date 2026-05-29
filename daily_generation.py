@@ -9,8 +9,13 @@ def daily_generation():
     watermark = os.environ.get("WATERMARK_TEXT", "@AIShortsGenerator")
     lang = os.environ.get("LANGUAGE", "es")
     
+    # Intentar leer el número de videos desde la variable de entorno, por defecto 3 para mayor estabilidad
+    try:
+        target_count = int(os.environ.get("VIDEO_COUNT", "3"))
+    except ValueError:
+        target_count = 3
+        
     all_generated_folders = []
-    target_count = 4
     attempts = 0
     max_total_attempts = 10 # Seguridad para evitar bucles infinitos
     
