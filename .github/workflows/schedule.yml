@@ -6,6 +6,9 @@ on:
     - cron: '11 9 * * *' # 12:11 UTC (09:11 AM ARG - Tanda 2, 8 horas despues)
   workflow_dispatch:
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
 jobs:
   automate:
     name: Generate Daily Videos
@@ -88,12 +91,14 @@ jobs:
           zip -r "../$FILE_NAME" .
           cd ..
           echo "✅ Zipped $(ls output | wc -l) files into $FILE_NAME"
+          echo "zipped=true" >> $GITHUB_OUTPUT
         else
           echo "No files found in output directory to zip."
+          echo "zipped=false" >> $GITHUB_OUTPUT
         fi
 
     - name: Upload Artifacts
-      if: always()
+      if: always() && steps.zip_step.outputs.zipped == 'true'
       uses: actions/upload-artifact@v4
       with:
         name: ${{ steps.zip_step.outputs.filename }}

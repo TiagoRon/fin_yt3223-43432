@@ -33,6 +33,9 @@ on:
         required: false
         default: 'es'
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
 jobs:
   generate_manual:
     name: Generate Cloud Videos
@@ -116,14 +119,19 @@ jobs:
         # Generar nombre con fecha (ej: videos_2024-04-20_23-15.zip)
         FILE_NAME="videos_$(date +'%Y-%m-%d_%H-%M').zip"
         echo "filename=$FILE_NAME" >> $GITHUB_OUTPUT
-        
-        mkdir -p output
-        cd output
-        zip -r "../$FILE_NAME" . || echo "Zip empty or failed"
-        cd ..
+        if [ -d "output" ] && [ "$(ls -A output)" ]; then
+          cd output
+          zip -r "../$FILE_NAME" .
+          cd ..
+          echo "✅ Zipped $(ls output | wc -l) files into $FILE_NAME"
+          echo "zipped=true" >> $GITHUB_OUTPUT
+        else
+          echo "No files found in output directory to zip."
+          echo "zipped=false" >> $GITHUB_OUTPUT
+        fi
 
     - name: Upload Final Bundle
-      if: always()
+      if: always() && steps.zip_step.outputs.zipped == 'true'
       uses: actions/upload-artifact@v4
       with:
         name: ${{ steps.zip_step.outputs.filename }}
