@@ -64,7 +64,7 @@ jobs:
         PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY }}
         WATERMARK_TEXT: "@AIShortsGenerator"
         LANGUAGE: "es"
-        VIDEO_COUNT: "3"
+        VIDEO_COUNT: "4"
       run: python daily_generation.py
 
     - name: Commit & Push History

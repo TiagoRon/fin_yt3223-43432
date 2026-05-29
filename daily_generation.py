@@ -11,9 +11,9 @@ def daily_generation():
     
     # Intentar leer el número de videos desde la variable de entorno, por defecto 3 para mayor estabilidad
     try:
-        target_count = int(os.environ.get("VIDEO_COUNT", "3"))
+        target_count = int(os.environ.get("VIDEO_COUNT", "4"))
     except ValueError:
-        target_count = 3
+        target_count = 4
         
     all_generated_folders = []
     attempts = 0
