@@ -46,13 +46,25 @@ jobs:
         python -m pip install --upgrade pip
         pip install -r requirements.txt
 
-    - name: Run Daily Generation
+    - name: Add Swap Space (Prevent Out of Memory)
+      run: |
+        sudo fallocate -l 10G /swapfile
+        sudo chmod 600 /swapfile
+        sudo mkswap /swapfile
+        sudo swapon /swapfile
+        free -h
+
+    - name: Run Daily Generation (With Auto-Retry)
+      uses: nick-fields/retry@v3
       env:
         GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
         PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY }}
         WATERMARK_TEXT: "@AIShortsGenerator"
         LANGUAGE: "es"
-      run: python daily_generation.py
+      with:
+        timeout_minutes: 60
+        max_attempts: 3
+        command: python daily_generation.py
 
     - name: Commit & Push History
       continue-on-error: true

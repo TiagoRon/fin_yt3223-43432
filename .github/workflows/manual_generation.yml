@@ -62,6 +62,14 @@ jobs:
         python -m pip install --upgrade pip
         pip install -r requirements.txt
 
+    - name: Add Swap Space (Prevent Out of Memory)
+      run: |
+        sudo fallocate -l 10G /swapfile
+        sudo chmod 600 /swapfile
+        sudo mkswap /swapfile
+        sudo swapon /swapfile
+        free -h
+
     - name: Set up YouTube Cookies (Optional)
       env:
         YOUTUBE_COOKIES: ${{ secrets.YOUTUBE_COOKIES }}
@@ -76,7 +84,8 @@ jobs:
           echo "Cookies saved and verified via Unix tools."
         fi
 
-    - name: Run Cloud Video Generation
+    - name: Run Cloud Video Generation (With Auto-Retry)
+      uses: nick-fields/retry@v3
       env:
         GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
         PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY }}
@@ -85,7 +94,10 @@ jobs:
         VIDEO_TOPIC: ${{ github.event.inputs.video_topic }}
         WATERMARK_TEXT: ${{ github.event.inputs.watermark_text }}
         LANGUAGE: ${{ github.event.inputs.language }}
-      run: python cloud_main.py
+      with:
+        timeout_minutes: 60
+        max_attempts: 3
+        command: python cloud_main.py
 
     - name: Commit & Push History (Prevent Duplicates)
       continue-on-error: true
